@@ -837,7 +837,6 @@ minimize.MouseButton1Click:Connect(function()
 
 	if minimized then
 		for _, child in ipairs(contentChildren) do
-			tween(child, 0.1, {})
 			child.Visible = false
 		end
 		tween(main, 0.16, { Size = UDim2.fromOffset(390, 46) })
