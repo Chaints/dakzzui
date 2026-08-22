@@ -109,26 +109,31 @@ local function pressFeedback(button, normalColor, pressColor)
 end
 
 --==================================================
--- RESPONSIVE SCALE
+-- RESPONSIVE SCALE (no UIScale dependency - some executors
+-- don't support Instance.new("UIScale"), so we compute a
+-- plain number and apply it to Size/Position offsets manually)
 --==================================================
 
-local uiScale = Instance.new("UIScale")
-uiScale.Value = 1
+local currentScale = 1
 
-local function updateScale()
+local function computeScale()
 	local vp = camera.ViewportSize
-	-- base design size ~400x260; scale down on small screens, cap on large ones
+	-- base design size ~390x250; scale down on small screens, cap on large ones
 	local scaleX = vp.X / 420
 	local scaleY = vp.Y / 500
 	local s = math.min(scaleX, scaleY, 1.05)
 	s = math.clamp(s, 0.62, 1.05)
-	uiScale.Value = s
+	return s
 end
 
 --==================================================
 -- MAIN WINDOW
 --==================================================
 
+-- Fixed-size window (390x250). We don't rely on any scaling Instance
+-- (UIScale isn't supported on all executors). Instead the window keeps
+-- its native pixel size, sized to comfortably fit small phone screens
+-- already, and we clamp its position so it never goes off-screen.
 local main = Instance.new("Frame")
 main.Name = "Main"
 main.Size = UDim2.fromOffset(390, 250)
@@ -139,7 +144,12 @@ main.BorderSizePixel = 0
 main.ClipsDescendants = false
 main.Parent = gui
 
-uiScale.Parent = main
+local function updateScale()
+	-- kept as a no-op hook for future use; window size stays fixed
+	-- since it's already compact enough for phone screens (390x250)
+	currentScale = 1
+end
+
 corner(main, 14)
 stroke(main, STROKE, 1, 0.2)
 gradient(main, Color3.fromRGB(18, 19, 24), Color3.fromRGB(13, 14, 17), 90)
@@ -695,10 +705,6 @@ popup.Visible = false
 popup.ZIndex = 20
 popup.Parent = gui
 
-popup.Parent = gui
-local popupScale = Instance.new("UIScale")
-popupScale.Parent = popup
-
 corner(popup, 12)
 stroke(popup, STROKE, 1, 0.15)
 gradient(popup, Color3.fromRGB(26, 27, 33), Color3.fromRGB(19, 20, 24), 90)
@@ -803,11 +809,11 @@ local function closePopup()
 		Enum.EasingStyle.Quad,
 		Enum.EasingDirection.In
 	)
-	tween(popupScale, 0.14, { Value = 0.94 })
 
 	t.Completed:Connect(function()
 		popup.Visible = false
 		backdrop.Visible = false
+		popup.Size = UDim2.fromOffset(210, 150)
 	end)
 end
 
@@ -815,10 +821,10 @@ local function openPopup()
 	popup.Visible = true
 	backdrop.Visible = true
 	backdrop.BackgroundTransparency = 1
-	popupScale.Value = 0.94
+	popup.Size = UDim2.fromOffset(190, 138)
 
 	tween(backdrop, 0.15, { BackgroundTransparency = 0.5 })
-	tween(popupScale, 0.16, { Value = 1 })
+	tween(popup, 0.16, { Size = UDim2.fromOffset(210, 150) })
 end
 
 skills.MouseButton1Click:Connect(openPopup)
@@ -870,36 +876,32 @@ corner(logo, 16)
 stroke(logo, STROKE, 1, 0.2)
 gradient(logo, Color3.fromRGB(20, 21, 26), Color3.fromRGB(13, 14, 17), 90)
 
-local logoScale = Instance.new("UIScale")
-logoScale.Parent = logo
+local logoFullSize = UDim2.fromOffset(56, 56)
+local logoTinySize = UDim2.fromOffset(6, 6)
 
 compact.MouseButton1Click:Connect(function()
 	compactMode = true
 
-	tween(uiScale, 0.14, { Value = 0 })
+	tween(main, 0.14, { Size = UDim2.fromOffset(6, 6) })
 
 	task.delay(0.14, function()
 		main.Visible = false
-		updateScale() -- restore correct scale value for next time main reopens
+		main.Size = UDim2.fromOffset(390, 250) -- restore for next reopen
 
 		logo.Visible = true
-		logoScale.Value = 0
-		tween(logoScale, 0.16, { Value = 1 })
+		logo.Size = logoTinySize
+		tween(logo, 0.16, { Size = logoFullSize })
 	end)
 end)
 
 logo.MouseButton1Click:Connect(function()
-	tween(logoScale, 0.1, { Value = 0 })
+	tween(logo, 0.1, { Size = logoTinySize })
 
 	task.delay(0.1, function()
 		logo.Visible = false
 		main.Visible = true
-
-		local vp = camera.ViewportSize
-		local target = math.clamp(math.min(vp.X / 420, vp.Y / 500, 1.05), 0.62, 1.05)
-
-		uiScale.Value = 0
-		tween(uiScale, 0.16, { Value = target })
+		main.Size = UDim2.fromOffset(6, 6)
+		tween(main, 0.16, { Size = UDim2.fromOffset(390, 250) })
 	end)
 end)
 
@@ -908,14 +910,14 @@ end)
 --==================================================
 
 close.MouseButton1Click:Connect(function()
-	tween(uiScale, 0.14, { Value = 0 })
+	tween(main, 0.14, { Size = UDim2.fromOffset(6, 6) })
 	task.delay(0.14, function()
 		gui:Destroy()
 	end)
 end)
 
 --==================================================
--- DRAG (works with UIScale correctly)
+-- DRAG
 --==================================================
 
 local dragging = false
