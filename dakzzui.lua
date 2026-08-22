@@ -137,7 +137,7 @@ end
 -- already, and we clamp its position so it never goes off-screen.
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.Size = UDim2.fromOffset(390, 250)
+main.Size = UDim2.fromOffset(390, 246)
 main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.new(0.5, 0, 0.46, 0)
 main.BackgroundColor3 = BG
@@ -191,28 +191,39 @@ subtitleRow.Position = UDim2.fromOffset(26, 25)
 subtitleRow.BackgroundTransparency = 1
 subtitleRow.Parent = header
 
-local dot = Instance.new("Frame")
-dot.Size = UDim2.fromOffset(6, 6)
-dot.Position = UDim2.fromOffset(0, 3)
-dot.BackgroundColor3 = GREEN
-dot.BorderSizePixel = 0
-dot.Parent = subtitleRow
-corner(dot, 99)
+local statusBtn = Instance.new("TextButton")
+statusBtn.Size = UDim2.fromOffset(64, 22)
+statusBtn.AnchorPoint = Vector2.new(1, 0)
+statusBtn.Position = UDim2.new(1, -118, 0, 12)
+statusBtn.BackgroundColor3 = CARD2
+statusBtn.AutoButtonColor = false
+statusBtn.Text = ""
+statusBtn.Parent = header
+corner(statusBtn, 7)
+stroke(statusBtn, STROKE, 1, 0.4)
 
--- soft glow ring behind the dot (cheap: just a transparent bigger circle)
-local dotGlow = Instance.new("Frame")
-dotGlow.Size = UDim2.fromOffset(10, 10)
-dotGlow.Position = UDim2.fromOffset(-2, 1)
-dotGlow.BackgroundColor3 = GREEN
-dotGlow.BackgroundTransparency = 0.75
-dotGlow.BorderSizePixel = 0
-dotGlow.ZIndex = 0
-dotGlow.Parent = subtitleRow
-corner(dotGlow, 99)
+local statusDot = Instance.new("Frame")
+statusDot.Size = UDim2.fromOffset(6, 6)
+statusDot.AnchorPoint = Vector2.new(0, 0.5)
+statusDot.Position = UDim2.new(0, 8, 0.5, 0)
+statusDot.BackgroundColor3 = MUTED
+statusDot.BorderSizePixel = 0
+statusDot.Parent = statusBtn
+corner(statusDot, 99)
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 1, 0)
+statusLabel.Position = UDim2.fromOffset(18, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "START"
+statusLabel.TextColor3 = TEXT
+statusLabel.TextSize = 9
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = statusBtn
 
 local subtitle = Instance.new("TextLabel")
-subtitle.Size = UDim2.new(1, -12, 0, 12)
-subtitle.Position = UDim2.fromOffset(12, 0)
+subtitle.Size = UDim2.new(1, 0, 0, 12)
 subtitle.BackgroundTransparency = 1
 subtitle.Text = "Bounty Assistant"
 subtitle.TextColor3 = MUTED
@@ -471,20 +482,20 @@ earnedRow.BackgroundTransparency = 1
 earnedRow.Parent = info
 
 local earnedLabel = Instance.new("TextLabel")
-earnedLabel.Size = UDim2.new(0.5, 0, 1, 0)
+earnedLabel.Size = UDim2.new(0.58, 0, 1, 0)
 earnedLabel.BackgroundTransparency = 1
-earnedLabel.Text = "EARNED"
+earnedLabel.Text = "EARNED BOUNTY"
 earnedLabel.TextColor3 = MUTED
-earnedLabel.TextSize = 9
+earnedLabel.TextSize = 8
 earnedLabel.Font = Enum.Font.GothamBold
 earnedLabel.TextXAlignment = Enum.TextXAlignment.Left
 earnedLabel.Parent = earnedRow
 
 local earnedValue = Instance.new("TextLabel")
-earnedValue.Size = UDim2.new(0.5, 0, 1, 0)
-earnedValue.Position = UDim2.new(0.5, 0, 0, 0)
+earnedValue.Size = UDim2.new(0.42, 0, 1, 0)
+earnedValue.Position = UDim2.new(0.58, 0, 0, 0)
 earnedValue.BackgroundTransparency = 1
-earnedValue.Text = "$0"
+earnedValue.Text = "◈ 0"
 earnedValue.TextColor3 = ACCENT
 earnedValue.TextSize = 10
 earnedValue.Font = Enum.Font.GothamBold
@@ -517,7 +528,7 @@ local speedValueLabel = Instance.new("TextLabel")
 speedValueLabel.Size = UDim2.fromOffset(62, 34)
 speedValueLabel.Position = UDim2.fromOffset(0, 12)
 speedValueLabel.BackgroundTransparency = 1
-speedValueLabel.Text = "1.0x"
+speedValueLabel.Text = "2.0x"
 speedValueLabel.TextColor3 = TEXT
 speedValueLabel.TextSize = 11
 speedValueLabel.Font = Enum.Font.GothamBold
@@ -543,7 +554,7 @@ speedBar.Parent = speedTouchZone
 corner(speedBar, 99)
 
 local speedFill = Instance.new("Frame")
-speedFill.Size = UDim2.new(0.33, 0, 1, 0)
+speedFill.Size = UDim2.new(1, 0, 1, 0)
 speedFill.BackgroundColor3 = ACCENT
 speedFill.BorderSizePixel = 0
 speedFill.Parent = speedBar
@@ -553,7 +564,7 @@ gradient(speedFill, ACCENT, ACCENT_2, 0)
 local knob = Instance.new("Frame")
 knob.Size = UDim2.fromOffset(16, 16)
 knob.AnchorPoint = Vector2.new(0.5, 0.5)
-knob.Position = UDim2.new(0.33, 0, 0.5, 0)
+knob.Position = UDim2.new(1, 0, 0.5, 0)
 knob.BackgroundColor3 = Color3.new(1, 1, 1)
 knob.BorderSizePixel = 0
 knob.ZIndex = 2
@@ -606,37 +617,8 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --==================================================
--- START BUTTON (with running pulse indicator)
+-- START (compact status control, lives in header)
 --==================================================
-
-local start = Instance.new("TextButton")
-start.Size = UDim2.new(1, -28, 0, 36)
-start.Position = UDim2.fromOffset(14, 244)
-start.BackgroundColor3 = ACCENT
-start.AutoButtonColor = false
-start.Text = ""
-start.Parent = main
-corner(start, 9)
-gradient(start, ACCENT, ACCENT_2, 0)
-
-local startLabel = Instance.new("TextLabel")
-startLabel.Size = UDim2.new(1, 0, 1, 0)
-startLabel.BackgroundTransparency = 1
-startLabel.Text = "START"
-startLabel.TextColor3 = ACCENT_TEXT
-startLabel.TextSize = 12
-startLabel.Font = Enum.Font.GothamBold
-startLabel.Parent = start
-
-local startDot = Instance.new("Frame")
-startDot.Size = UDim2.fromOffset(6, 6)
-startDot.AnchorPoint = Vector2.new(0, 0.5)
-startDot.Position = UDim2.new(0.5, 34, 0.5, 0)
-startDot.BackgroundColor3 = ACCENT_TEXT
-startDot.BackgroundTransparency = 1
-startDot.BorderSizePixel = 0
-startDot.Parent = start
-corner(startDot, 99)
 
 local running = false
 local pulseConn
@@ -646,41 +628,39 @@ local function stopPulse()
 		pulseConn:Disconnect()
 		pulseConn = nil
 	end
-	startDot.BackgroundTransparency = 1
+	statusDot.BackgroundTransparency = 0
 end
 
 local function startPulse()
 	local t = 0
 	pulseConn = RunService.Heartbeat:Connect(function(dt)
 		t = t + dt
-		startDot.BackgroundTransparency = 0.5 + math.sin(t * 4) * 0.5
+		statusDot.BackgroundTransparency = 0.15 + math.sin(t * 4) * 0.35
 	end)
 end
 
-start.MouseButton1Click:Connect(function()
+statusBtn.MouseButton1Click:Connect(function()
 	running = not running
 
-	local existingGrad = start:FindFirstChildOfClass("UIGradient")
-	if existingGrad then existingGrad:Destroy() end
-
 	if running then
-		startLabel.Text = "  RUNNING"
-		tween(start, 0.12, { BackgroundColor3 = GREEN })
+		statusLabel.Text = "RUNNING"
+		tween(statusDot, 0.12, { BackgroundColor3 = GREEN })
+		tween(statusBtn, 0.12, { BackgroundColor3 = CARD2 })
+		local existingStroke = statusBtn:FindFirstChildOfClass("UIStroke")
+		if existingStroke then existingStroke:Destroy() end
+		stroke(statusBtn, GREEN, 1, 0.5)
 		startPulse()
 	else
-		startLabel.Text = "START"
-		tween(start, 0.12, { BackgroundColor3 = ACCENT })
-		gradient(start, ACCENT, ACCENT_2, 0)
+		statusLabel.Text = "START"
+		tween(statusDot, 0.12, { BackgroundColor3 = MUTED })
+		local existingStroke = statusBtn:FindFirstChildOfClass("UIStroke")
+		if existingStroke then existingStroke:Destroy() end
+		stroke(statusBtn, STROKE, 1, 0.4)
 		stopPulse()
 	end
 end)
 
-start.MouseButton1Down:Connect(function()
-	tween(start, 0.08, { Size = UDim2.new(1, -32, 0, 34) })
-end)
-start.MouseButton1Up:Connect(function()
-	tween(start, 0.1, { Size = UDim2.new(1, -28, 0, 36) })
-end)
+pressFeedback(statusBtn, CARD2, CARD)
 
 --==================================================
 -- BACKDROP (for popup, tap outside to close)
@@ -841,7 +821,7 @@ done.MouseButton1Click:Connect(closePopup)
 --==================================================
 
 local minimized = false
-local contentChildren = { left, info, speedRow, start, divider }
+local contentChildren = { left, info, speedRow, divider }
 
 minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
@@ -855,7 +835,7 @@ minimize.MouseButton1Click:Connect(function()
 		for _, child in ipairs(contentChildren) do
 			child.Visible = true
 		end
-		tween(main, 0.16, { Size = UDim2.fromOffset(390, 250) })
+		tween(main, 0.16, { Size = UDim2.fromOffset(390, 246) })
 	end
 end)
 
@@ -871,18 +851,48 @@ logo.AnchorPoint = Vector2.new(0.5, 0.5)
 logo.Position = UDim2.new(0.5, 0, 0.46, 0)
 logo.BackgroundColor3 = BG
 logo.AutoButtonColor = false
-logo.Text = "◆"
-logo.TextColor3 = ACCENT
-logo.TextSize = 20
-logo.Font = Enum.Font.GothamBold
+logo.Text = ""
 logo.Visible = false
 logo.Parent = gui
 corner(logo, 16)
 stroke(logo, STROKE, 1, 0.2)
 gradient(logo, Color3.fromRGB(20, 21, 26), Color3.fromRGB(13, 14, 17), 90)
 
+-- Monogram: Z (behind, larger) + D (front, offset) overlapping like a collab mark
+local logoZ = Instance.new("TextLabel")
+logoZ.Size = UDim2.fromOffset(40, 40)
+logoZ.AnchorPoint = Vector2.new(0.5, 0.5)
+logoZ.Position = UDim2.new(0.5, -6, 0.5, -3)
+logoZ.BackgroundTransparency = 1
+logoZ.Text = "Z"
+logoZ.TextColor3 = ACCENT
+logoZ.TextTransparency = 0.15
+logoZ.TextSize = 26
+logoZ.Font = Enum.Font.GothamBlack
+logoZ.ZIndex = 1
+logoZ.Parent = logo
+
+local logoD = Instance.new("TextLabel")
+logoD.Size = UDim2.fromOffset(40, 40)
+logoD.AnchorPoint = Vector2.new(0.5, 0.5)
+logoD.Position = UDim2.new(0.5, 7, 0.5, 4)
+logoD.BackgroundTransparency = 1
+logoD.Text = "D"
+logoD.TextColor3 = TEXT
+logoD.TextSize = 26
+logoD.Font = Enum.Font.GothamBlack
+logoD.ZIndex = 2
+logoD.Parent = logo
+
 local logoFullSize = UDim2.fromOffset(56, 56)
 local logoTinySize = UDim2.fromOffset(6, 6)
+
+-- Drag state declared early so all closures below share the same locals
+local logoDragging = false
+local logoDragStart
+local logoStartPos
+local logoMoved = false
+local LOGO_DRAG_THRESHOLD = 6 -- pixels of movement before it counts as a drag, not a tap
 
 compact.MouseButton1Click:Connect(function()
 	compactMode = true
@@ -891,7 +901,7 @@ compact.MouseButton1Click:Connect(function()
 
 	task.delay(0.14, function()
 		main.Visible = false
-		main.Size = UDim2.fromOffset(390, 250) -- restore for next reopen
+		main.Size = UDim2.fromOffset(390, 246) -- restore for next reopen
 
 		logo.Visible = true
 		logo.Size = logoTinySize
@@ -900,14 +910,60 @@ compact.MouseButton1Click:Connect(function()
 end)
 
 logo.MouseButton1Click:Connect(function()
+	if logoMoved then
+		return -- was a drag, not a tap; don't open the UI
+	end
+
 	tween(logo, 0.1, { Size = logoTinySize })
 
 	task.delay(0.1, function()
 		logo.Visible = false
 		main.Visible = true
 		main.Size = UDim2.fromOffset(6, 6)
-		tween(main, 0.16, { Size = UDim2.fromOffset(390, 250) })
+		tween(main, 0.16, { Size = UDim2.fromOffset(390, 246) })
 	end)
+end)
+
+--==================================================
+-- LOGO DRAG (independent of main window; tap still opens it)
+--==================================================
+
+logo.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch
+	or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		logoDragging = true
+		logoMoved = false
+		logoDragStart = input.Position
+		logoStartPos = logo.Position
+	end
+end)
+
+logo.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch
+	or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		logoDragging = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if not logoDragging then return end
+	if input.UserInputType == Enum.UserInputType.Touch
+	or input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - logoDragStart
+
+		if math.abs(delta.X) > LOGO_DRAG_THRESHOLD or math.abs(delta.Y) > LOGO_DRAG_THRESHOLD then
+			logoMoved = true
+		end
+
+		if logoMoved then
+			logo.Position = UDim2.new(
+				logoStartPos.X.Scale,
+				logoStartPos.X.Offset + delta.X,
+				logoStartPos.Y.Scale,
+				logoStartPos.Y.Offset + delta.Y
+			)
+		end
+	end
 end)
 
 --==================================================
@@ -990,7 +1046,7 @@ function API.SetTargetInfo(data)
 	if data.location then infoValues["LOCATION"].Text = data.location end
 	if data.level then infoValues["LEVEL"].Text = tostring(data.level) end
 	if data.health then infoValues["HEALTH"].Text = data.health end
-	if data.earned then infoValues["EARNED"].Text = "$" .. tostring(data.earned) end
+	if data.earned then infoValues["EARNED"].Text = "◈ " .. tostring(data.earned) end
 end
 
 function API.SetHop(state)
@@ -1021,7 +1077,7 @@ function API.OnSkip(fn)
 end
 
 function API.OnStart(fn)
-	start.MouseButton1Click:Connect(fn)
+	statusBtn.MouseButton1Click:Connect(fn)
 end
 
 _G.DakzzBountyUI = API
