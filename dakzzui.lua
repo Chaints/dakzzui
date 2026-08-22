@@ -28,21 +28,22 @@ gui.DisplayOrder = 999
 gui.Parent = playerGui
 
 --==================================================
--- COLORS (elegant dark, subtle blue accent)
+-- COLORS (Fluent/Rayfield-style mono, clean, no loud gradients)
 --==================================================
 
-local BG        = Color3.fromRGB(15, 16, 20)
-local CARD      = Color3.fromRGB(22, 24, 29)
-local CARD2     = Color3.fromRGB(28, 30, 36)
-local STROKE    = Color3.fromRGB(45, 48, 56)
+local BG        = Color3.fromRGB(18, 18, 20)
+local CARD      = Color3.fromRGB(26, 26, 29)
+local CARD2     = Color3.fromRGB(33, 33, 37)
+local STROKE    = Color3.fromRGB(50, 50, 55)
 
-local TEXT      = Color3.fromRGB(240, 242, 247)
-local MUTED     = Color3.fromRGB(140, 145, 158)
+local TEXT      = Color3.fromRGB(240, 240, 242)
+local MUTED     = Color3.fromRGB(148, 148, 155)
 
-local ACCENT    = Color3.fromRGB(108, 142, 255)
-local ACCENT_2  = Color3.fromRGB(146, 118, 255)
-local GREEN     = Color3.fromRGB(84, 214, 140)
-local RED       = Color3.fromRGB(235, 92, 100)
+local ACCENT    = Color3.fromRGB(235, 235, 240)  -- near-white, mono accent
+local ACCENT_2  = Color3.fromRGB(205, 205, 212)  -- slightly dimmer for subtle gradient
+local ACCENT_TEXT = Color3.fromRGB(20, 20, 22)   -- dark text used on top of ACCENT bg
+local GREEN     = Color3.fromRGB(96, 200, 145)
+local RED       = Color3.fromRGB(225, 95, 100)
 
 --==================================================
 -- HELPERS
@@ -622,7 +623,7 @@ local startLabel = Instance.new("TextLabel")
 startLabel.Size = UDim2.new(1, 0, 1, 0)
 startLabel.BackgroundTransparency = 1
 startLabel.Text = "START"
-startLabel.TextColor3 = Color3.new(1, 1, 1)
+startLabel.TextColor3 = ACCENT_TEXT
 startLabel.TextSize = 12
 startLabel.Font = Enum.Font.GothamBold
 startLabel.Parent = start
@@ -631,7 +632,7 @@ local startDot = Instance.new("Frame")
 startDot.Size = UDim2.fromOffset(6, 6)
 startDot.AnchorPoint = Vector2.new(0, 0.5)
 startDot.Position = UDim2.new(0.5, 34, 0.5, 0)
-startDot.BackgroundColor3 = Color3.new(1, 1, 1)
+startDot.BackgroundColor3 = ACCENT_TEXT
 startDot.BackgroundTransparency = 1
 startDot.BorderSizePixel = 0
 startDot.Parent = start
@@ -659,6 +660,9 @@ end
 start.MouseButton1Click:Connect(function()
 	running = not running
 
+	local existingGrad = start:FindFirstChildOfClass("UIGradient")
+	if existingGrad then existingGrad:Destroy() end
+
 	if running then
 		startLabel.Text = "  RUNNING"
 		tween(start, 0.12, { BackgroundColor3 = GREEN })
@@ -666,6 +670,7 @@ start.MouseButton1Click:Connect(function()
 	else
 		startLabel.Text = "START"
 		tween(start, 0.12, { BackgroundColor3 = ACCENT })
+		gradient(start, ACCENT, ACCENT_2, 0)
 		stopPulse()
 	end
 end)
@@ -749,7 +754,7 @@ local function skillButton(letter, order)
 	b.BackgroundColor3 = selected[letter] and ACCENT or CARD2
 	b.AutoButtonColor = false
 	b.Text = letter
-	b.TextColor3 = TEXT
+	b.TextColor3 = selected[letter] and ACCENT_TEXT or TEXT
 	b.TextSize = 11
 	b.Font = Enum.Font.GothamBold
 	b.ZIndex = 21
@@ -767,10 +772,10 @@ local function skillButton(letter, order)
 		if existingGrad then existingGrad:Destroy() end
 
 		if selected[letter] then
-			tween(b, 0.1, { BackgroundColor3 = ACCENT })
+			tween(b, 0.1, { BackgroundColor3 = ACCENT, TextColor3 = ACCENT_TEXT })
 			gradient(b, ACCENT, ACCENT_2, 0)
 		else
-			tween(b, 0.1, { BackgroundColor3 = CARD2 })
+			tween(b, 0.1, { BackgroundColor3 = CARD2, TextColor3 = TEXT })
 		end
 	end)
 end
@@ -788,7 +793,7 @@ done.Position = UDim2.new(1, -14, 1, -12)
 done.BackgroundColor3 = ACCENT
 done.AutoButtonColor = false
 done.Text = "DONE"
-done.TextColor3 = Color3.new(1, 1, 1)
+done.TextColor3 = ACCENT_TEXT
 done.TextSize = 10
 done.Font = Enum.Font.GothamBold
 done.ZIndex = 21
