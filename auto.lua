@@ -99,7 +99,7 @@ local RealIslandCenter = {
 -- ==========================================
 -- LOAD UI MODULE (ui.lua) — replace URL below with your actual raw GitHub link
 -- ==========================================
-local UI_RAW_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/ui.lua"
+local UI_RAW_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/ui.lua"
 
 local UIModule
 do

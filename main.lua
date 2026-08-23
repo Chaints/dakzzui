@@ -7,7 +7,7 @@
 -- link raw GitHub repo kamu yang sebenarnya.
 -- ==========================================
 
-local BASE_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/"
+local BASE_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/"
 
 local function loadRemote(path)
     local url = BASE_URL .. path
