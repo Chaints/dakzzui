@@ -143,19 +143,23 @@ if UIModule then
 end
 
 -- Lightweight sync loop: mirrors the real local variables into `state`
--- every tick, and pulls back any UI-driven writes (like manualSkipRequested).
+-- every tick, and consumes any UI-driven skip request exactly once
+-- (edge-triggered) to avoid a race where the UI's flag stays true and
+-- keeps re-arming manualSkipRequested after the hunting loop already
+-- cleared it — that was the "skip → search → skip → search" loop bug.
 task.spawn(function()
     while not state.stopRequested do
         task.wait(0.1)
         state.currentTargetPlayer = currentTargetPlayer
         state.isHunting = isHunting
 
-        -- UI can set state.manualSkipRequested = true when Skip is tapped;
-        -- pull it back into the real variable so the hunting loop below sees it.
-        if state.manualSkipRequested and not manualSkipRequested then
+        -- Consume the UI's skip request exactly once: read it, act on it,
+        -- then immediately clear BOTH the state flag and local flag's
+        -- source so it can't re-trigger next tick.
+        if state.manualSkipRequested then
             manualSkipRequested = true
+            state.manualSkipRequested = false -- consumed; UI must set it true again for another skip
         end
-        state.manualSkipRequested = manualSkipRequested
     end
 end)
 
@@ -192,13 +196,13 @@ task.spawn(function()
 end)
 
 local function createNewLayoutUI()
-    if UI then
+    if UI and not state.stopRequested then
         UI.createNewLayoutUI()
     end
 end
 
 local function updateHUDDisplay(player)
-    if UI then
+    if UI and not state.stopRequested then
         UI.updateHUDDisplay(player)
     end
 end
@@ -928,11 +932,13 @@ LocalPlayer.CharacterRemoving:Connect(function()
 end)
 
 LocalPlayer.CharacterAdded:Connect(function(newChar)
+    if state.stopRequested then return end
     stopAllThreads()
     newChar:WaitForChild("HumanoidRootPart", 10)
     local hum = newChar:WaitForChild("Humanoid", 10)
     if hum then hum.AutoRotate = true end
     task.wait(1.0)
+    if state.stopRequested then return end
     createNewLayoutUI()
     autoOnHakiAndInstinct()
     isHunting = false
