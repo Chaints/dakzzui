@@ -599,42 +599,66 @@ local function createNewLayoutUI()
     corner(logoStatusDot, 99)
     uistroke(logoStatusDot, BG, 2, 0)
 
+    --==================================================
+    -- MINI Z×D BURST (lightweight tap feedback, same visual
+    -- language as the ZxD loading screen but tiny & fast: a
+    -- handful of small squares pop out from the logo and fade,
+    -- instead of the full 35-cell assemble/disperse sequence.
+    -- Cheap: ~9 frames, short-range tweens, no bounce easing.
+    --==================================================
+    local burstColors = { ACCENT, TEXT, ACCENT_2 }
+
+    local function playLogoBurst()
+        for i = 1, 9 do
+            local angle = (i / 9) * math.pi * 2
+            local dist = 34
+
+            local particle = Instance.new("Frame")
+            particle.Size = UDim2.fromOffset(6, 6)
+            particle.AnchorPoint = Vector2.new(0.5, 0.5)
+            particle.Position = UDim2.new(0.5, 0, 0.5, 0)
+            particle.BackgroundColor3 = burstColors[(i % 3) + 1]
+            particle.BorderSizePixel = 0
+            particle.ZIndex = 49
+            particle.Parent = logo
+            corner(particle, 2)
+
+            local targetX = math.cos(angle) * dist
+            local targetY = math.sin(angle) * dist
+
+            tween(particle, 0.28, {
+                Position = UDim2.new(0.5, targetX, 0.5, targetY),
+                BackgroundTransparency = 1,
+                Rotation = math.random(-60, 60),
+            }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+            task.delay(0.28, function()
+                particle:Destroy()
+            end)
+        end
+
+        -- logo itself gives a quick punchy scale-down/up, like a heartbeat tap
+        tween(logo, 0.08, { Size = UDim2.fromOffset(46, 46) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        task.delay(0.08, function()
+            tween(logo, 0.12, { Size = UDim2.fromOffset(52, 52) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        end)
+    end
+
     local MAIN_FULL = UDim2.fromOffset(390, 246)
-    local MAIN_COLLAPSED = UDim2.fromOffset(150, 46) -- just enough to show the title text
 
-    -- Logo is always visible and independent of this collapse/expand toggle.
-    -- Collapsing just shrinks `main` down to a title-only strip; it never
-    -- gets Visible = false or Destroy()'d, so nothing about the script stops.
-    local contentChildren = { left, info, speedRow, divider }
-    local headerExtras = { accentBar, subtitleRow, statusBtn }
-
-    local TITLE_FULL_SIZE = UDim2.new(1, -140, 0, 18)
-    local TITLE_COLLAPSED_SIZE = UDim2.new(1, -70, 0, 18) -- room for the header buttons only
-
+    -- Logo is always visible and independent of this show/hide toggle.
+    -- Clicking the logo now hides the ENTIRE dashboard (main.Visible = false),
+    -- not just a resize down to a title strip — nothing about the script
+    -- stops running in the background either way.
     local function collapseDashboard()
         state.uiHidden = true
-        for _, child in ipairs(contentChildren) do
-            child.Visible = false
-        end
-        for _, extra in ipairs(headerExtras) do
-            extra.Visible = false
-        end
-        title.Position = UDim2.fromOffset(14, 8)
-        title.Size = TITLE_COLLAPSED_SIZE
-        tween(main, 0.16, { Size = MAIN_COLLAPSED })
+        main.Visible = false
     end
 
     local function expandDashboard()
         state.uiHidden = false
-        for _, child in ipairs(contentChildren) do
-            child.Visible = true
-        end
-        for _, extra in ipairs(headerExtras) do
-            extra.Visible = true
-        end
-        title.Position = UDim2.fromOffset(26, 8)
-        title.Size = TITLE_FULL_SIZE
-        tween(main, 0.16, { Size = MAIN_FULL })
+        main.Visible = true
+        main.Size = MAIN_FULL
     end
 
     local dashboardCollapsed = false
@@ -699,6 +723,7 @@ local function createNewLayoutUI()
         if logoMoved then
             return -- was a drag, not a tap; don't toggle the dashboard
         end
+        playLogoBurst()
         toggleDashboard()
     end)
 

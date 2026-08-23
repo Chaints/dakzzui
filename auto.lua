@@ -1,4 +1,4 @@
-print("[Bounty Hunter] Menjalankan inisialisasi awal (Auto-Queue Player <7, Scan Halaman 50-100)...")
+print("[Bounty Hunter] Menjalankan inisialisasi awal (Scan Server Halaman 1-200, Max 5)...")
 
 -- ==========================================
 -- SMART UI PARENTING (ANTI-CRASH)
@@ -38,10 +38,17 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- ==========================================
--- REMOTE EVENTS INITIALIZER
+-- REMOTE EVENTS INITIALIZER (SEA 3 & FAST ATTACK)
 -- ==========================================
 local ModulesFolder = ReplicatedStorage:WaitForChild("Modules", 5)
 local Net = ModulesFolder and ModulesFolder:WaitForChild("Net", 5)
+
+local NetFolder = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
+local RegisterAttack = NetFolder:WaitForChild("RE/RegisterAttack")
+local RegisterHit = NetFolder:WaitForChild("RE/RegisterHit")
+
+local JedaSenjataAsli = 0.4000000059604645
+local TokenKeamanan = "083cf9b7" -- ⚠️ Ganti dengan token terbaru jika darah tidak berkurang
 
 local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
 local CommF = RemotesFolder and RemotesFolder:WaitForChild("CommF_", 3)
@@ -51,29 +58,30 @@ local MasterClockRemote = ClockFolder and ClockFolder:WaitForChild("DelayedReque
 
 -- PARAMETER UTAMA 
 _G.CustomFlightSpeed = 300     
-local ATTACK_RANGE = 10.0      -- 10 STUD
+local M1_ATTACK_RANGE = 17.0   -- Jangkauan khusus Fast M1 (Pukul dekat)
+local SKILL_ATTACK_RANGE = 10.0 -- Jangkauan khusus Auto Skill (Diatur ke 10.0)
 local MAGNET_RANGE = 8.0       
 
 -- VARIABEL STATE
 local combatConnection = nil
 local noclipConnection = nil
 local skillThread = nil
+local m1Thread = nil 
 local currentTargetPlayer = nil 
 local manualSkipRequested = false 
 local hasTeleportedToIsland = false 
 local isHunting = false
 
 local manualSkipList = {} 
-local bountyBlacklist = {} -- Menggunakan sistem waktu (os.time)
+local bountyBlacklist = {} 
 local activeESP = {}
 
 local sliderInputChangedConn = nil
 local sliderInputEndedConn = nil
-local isPlayerEligibleForPvP
-local stopAllThreads -- forward declaration; real definition is further below 
+local isPlayerEligibleForPvP 
 
 -- ==========================================
--- DATABASE POSISI & TITIK TENGAH PULAU
+-- DATABASE POSISI & TITIK TENGAH PULAU (SEA 3)
 -- ==========================================
 local PortalPositions = {
     ["Castle On The Sea"] = Vector3.new(-5058.86328125, 314.5155029296875, -3155.88330078125),
@@ -98,7 +106,7 @@ local RealIslandCenter = {
 
 
 -- ==========================================
--- LOAD UI MODULE (ui.lua) — replace URL below with your actual raw GitHub link
+-- LOAD UI MODULE (ui.lua)
 -- ==========================================
 local UI_RAW_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/ui.lua"
 
@@ -142,6 +150,24 @@ if UIModule then
     end
 end
 
+local function createNewLayoutUI()
+    if UI and not state.stopRequested then
+        UI.createNewLayoutUI()
+    end
+end
+
+local function updateHUDDisplay(player)
+    if UI and not state.stopRequested then
+        UI.updateHUDDisplay(player)
+    end
+end
+
+-- NOTE: stopAllThreads() itself is defined further below in the hunting
+-- loop section of auto.lua. We can't forward-declare it here without
+-- causing a local-variable shadowing bug, so the watcher below calls it
+-- indirectly via _G.BH_StopAllThreads, which the hunting loop section
+-- assigns right after defining the real local function.
+
 -- Lightweight sync loop: mirrors the real local variables into `state`
 -- every tick, and consumes any UI-driven skip request exactly once
 -- (edge-triggered) to avoid a race where the UI's flag stays true and
@@ -153,9 +179,6 @@ task.spawn(function()
         state.currentTargetPlayer = currentTargetPlayer
         state.isHunting = isHunting
 
-        -- Consume the UI's skip request exactly once: read it, act on it,
-        -- then immediately clear BOTH the state flag and local flag's
-        -- source so it can't re-trigger next tick.
         if state.manualSkipRequested then
             manualSkipRequested = true
             state.manualSkipRequested = false -- consumed; UI must set it true again for another skip
@@ -172,7 +195,7 @@ task.spawn(function()
     end
 
     isHunting = false
-    stopAllThreads()
+    if _G.BH_StopAllThreads then _G.BH_StopAllThreads() end
 
     if combatConnection then combatConnection:Disconnect() end
     if noclipConnection then noclipConnection:Disconnect() end
@@ -186,29 +209,8 @@ task.spawn(function()
     end
     activeESP = {}
 
-    pcall(function()
-        if workspace:FindFirstChild("AntiWaterPlatform") then
-            workspace.AntiWaterPlatform:Destroy()
-        end
-    end)
-
     print("[Bounty Hunter] Script dihentikan lewat konfirmasi popup.")
 end)
-
-local function createNewLayoutUI()
-    if UI and not state.stopRequested then
-        UI.createNewLayoutUI()
-    end
-end
-
-local function updateHUDDisplay(player)
-    if UI and not state.stopRequested then
-        UI.updateHUDDisplay(player)
-    end
-end
-
-
-
 
 -- ==========================================
 -- ESP SYSTEM
@@ -431,12 +433,10 @@ isPlayerEligibleForPvP = function(targetPlayer)
     local dataFolder = targetPlayer:FindFirstChild("Data")
     if manualSkipList[targetPlayer.Name] then return false end
     
-    -- Cek Blacklist (120 Detik)
     if bountyBlacklist[targetPlayer.Name] and os.time() < bountyBlacklist[targetPlayer.Name] then 
         return false 
     end
     
-    -- DIED RECENTLY SUPER KETAT
     if targetPlayer:FindFirstChild("DiedRecently") then 
         bountyBlacklist[targetPlayer.Name] = os.time() + 120
         return false 
@@ -459,7 +459,6 @@ isPlayerEligibleForPvP = function(targetPlayer)
     end
     if char:FindFirstChildOfClass("ForceField") then return false end
     
-    -- SAFE ZONE SUPER KETAT
     if char:GetAttribute("SafeZone") or targetPlayer:GetAttribute("SafeZone") then return false end
     if char:FindFirstChild("SafeZone") then return false end
     local pvpDisabledAttr = char:GetAttribute("PvPDisabled") or targetPlayer:GetAttribute("PvPDisabled")
@@ -476,7 +475,6 @@ isPlayerEligibleForPvP = function(targetPlayer)
 
     if isAlly(targetPlayer) or isBuddhaOrPortalUser(targetPlayer) then return false end
     
-    -- Jarak Fisik Safe Zone
     local safeZones = {
         Vector3.new(-12463, 374, -7523),
         Vector3.new(-5058, 314, -3155),
@@ -491,7 +489,44 @@ isPlayerEligibleForPvP = function(targetPlayer)
 end
 
 -- ==========================================
--- INSTANT SKILL COMBO (ASYNC NO-DELAY)
+-- FAST M1 KILL AURA (MENGGUNAKAN M1_ATTACK_RANGE)
+-- ==========================================
+local function startM1Loop(targetPlayer)
+    if m1Thread then task.cancel(m1Thread) m1Thread = nil end
+
+    m1Thread = task.spawn(function()
+        while isHunting and currentTargetPlayer == targetPlayer and isPlayerEligibleForPvP(targetPlayer) do
+            local myChar = LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local tChar = targetPlayer and targetPlayer.Character
+            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+
+            if myRoot and tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                
+                if dist <= M1_ATTACK_RANGE then
+                    for comboKe = 1, 4 do
+                        RegisterAttack:FireServer(JedaSenjataAsli, comboKe)
+                        
+                        local partTarget = tRoot or tChar:FindFirstChild("UpperTorso")
+                        if partTarget then
+                            local argsHit = {
+                                [1] = partTarget,
+                                [2] = {},
+                                [4] = TokenKeamanan
+                            }
+                            RegisterHit:FireServer(unpack(argsHit))
+                        end
+                    end
+                end
+            end
+            task.wait(0.01) 
+        end
+    end)
+end
+
+-- ==========================================
+-- INSTANT SKILL COMBO (MENGGUNAKAN SKILL_ATTACK_RANGE)
 -- ==========================================
 local function executeToolRemote(targetPosition, skillType)
     pcall(function()
@@ -532,7 +567,6 @@ local function startSkillLoop(targetPlayer)
         local weaponCategories = {"Melee", "Fruit", "Sword", "Gun"}
         local skillKeys = {"Z", "X", "C", "V"}
         
-        -- BLOKIR SKILL V UNTUK BUAH INI
         local noVFruits = {"tiger", "yeti", "mammoth", "trex", "t-rex", "kitsune", "dragon", "gas", "buddha", "phoenix", "venom"}
 
         pcall(function()
@@ -548,7 +582,8 @@ local function startSkillLoop(targetPlayer)
 
             if myRoot and tRoot then
                 local dist = (myRoot.Position - tRoot.Position).Magnitude
-                if dist <= ATTACK_RANGE then 
+                
+                if dist <= SKILL_ATTACK_RANGE then 
                     autoOnHakiAndInstinct()
                     activateRaceV3AndV4()
 
@@ -582,13 +617,13 @@ local function startSkillLoop(targetPlayer)
                     end
                 end
             end
-            task.wait() 
+            task.wait(0.1) 
         end
     end)
 end
 
 -- ==========================================
--- SMART PORTAL ROUTER & SUBMARINE HANDLER (DELAY 3 DETIK DI NPC)
+-- SMART PORTAL ROUTER & SUBMARINE HANDLER
 -- ==========================================
 local function smoothMoveToTarget(destinationPos, speed)
     local char = LocalPlayer.Character
@@ -643,7 +678,6 @@ local function handleSmartPortalBypass(targetRoot)
         hasTeleportedToIsland = true
         pcall(function()
             enableNoclip()
-            
             local npcLuariPos = Vector3.new(-16270.20, 25.25, 1372.97)
             smoothMoveToTarget(npcLuariPos, _G.CustomFlightSpeed)
             
@@ -653,12 +687,10 @@ local function handleSmartPortalBypass(targetRoot)
                 if modulesNet then
                     local subWorkerSpeak = modulesNet:FindFirstChild("RF/SubmarineWorkerSpeak")
                     if subWorkerSpeak then
-                        local args = { [1] = "TravelToSubmergedIsland" }
-                        subWorkerSpeak:InvokeServer(unpack(args))
+                        subWorkerSpeak:InvokeServer("TravelToSubmergedIsland")
                     end
                 end
             end)
-            
             task.wait(3.0) 
         end)
         return
@@ -668,7 +700,6 @@ local function handleSmartPortalBypass(targetRoot)
         hasTeleportedToIsland = true
         pcall(function()
             enableNoclip()
-            
             local npcDalamPos = Vector3.new(11421.99, -2154.80, 9728.17)
             smoothMoveToTarget(npcDalamPos, _G.CustomFlightSpeed)
             
@@ -678,12 +709,10 @@ local function handleSmartPortalBypass(targetRoot)
                 if modulesNet then
                     local subTransport = modulesNet:FindFirstChild("RF/SubmarineTransportation")
                     if subTransport then
-                        local args = { [1] = "InitiateTeleport", [2] = "Tiki Outpost" }
-                        subTransport:InvokeServer(unpack(args))
+                        subTransport:InvokeServer("InitiateTeleport", "Tiki Outpost")
                     end
                 end
             end)
-            
             task.wait(3.0) 
         end)
         return
@@ -806,9 +835,10 @@ end
 -- ==========================================
 -- HUNTING MAIN LOOP
 -- ==========================================
-stopAllThreads = function()
+local function stopAllThreads()
     if combatConnection then combatConnection:Disconnect() combatConnection = nil end
     if skillThread then task.cancel(skillThread) skillThread = nil end
+    if m1Thread then task.cancel(m1Thread) m1Thread = nil end
     disableNoclip()
     
     local myChar = LocalPlayer.Character
@@ -821,6 +851,7 @@ stopAllThreads = function()
     currentTargetPlayer = nil 
     pcall(function() if workspace:FindFirstChild("AntiWaterPlatform") then workspace.AntiWaterPlatform:Destroy() end end)
 end
+_G.BH_StopAllThreads = stopAllThreads
 
 local function startHuntingLoop()
     if isHunting then return end
@@ -836,14 +867,6 @@ local function startHuntingLoop()
                 autoOnHakiAndInstinct()
                 
                 if not currentTargetPlayer then
-                    -- Skip was already processed (currentTargetPlayer got nil'd below
-                    -- when we broke out of the fight loop). Clear the flag here,
-                    -- regardless of whether a new target is found this tick — otherwise
-                    -- manualSkipRequested stays stuck true forever whenever there's no
-                    -- other eligible player, causing the fly/combat loop to keep
-                    -- starting and immediately self-cancelling (the "jalan-mati-jalan-mati" bug).
-                    manualSkipRequested = false
-
                     for _, player in pairs(Players:GetPlayers()) do
                         if isPlayerEligibleForPvP(player) then
                             local targetRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -851,6 +874,7 @@ local function startHuntingLoop()
                             
                             if targetRoot and targetHumanoid then
                                 currentTargetPlayer = player
+                                manualSkipRequested = false
                                 hasTeleportedToIsland = false
                                 updateHUDDisplay(player)
                                 applyTargetHighlight(player.Character)
@@ -871,6 +895,7 @@ local function startHuntingLoop()
                         end
                         
                         flyTowardsTarget(targetRoot)
+                        startM1Loop(currentTargetPlayer)
                         startSkillLoop(currentTargetPlayer)
                         
                         repeat
@@ -885,7 +910,6 @@ local function startHuntingLoop()
                            or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0)
                         
                         if targetHumanoid and targetHumanoid.Health <= 0 and currentTargetPlayer then
-                            -- BLACKLIST 120 DETIK SETELAH MATI
                             bountyBlacklist[currentTargetPlayer.Name] = os.time() + 120
                             print("[Bounty Hunter] Target ditumbangkan & masuk blacklist 2 menit: " .. currentTargetPlayer.Name)
                         end
