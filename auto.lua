@@ -69,7 +69,8 @@ local activeESP = {}
 
 local sliderInputChangedConn = nil
 local sliderInputEndedConn = nil
-local isPlayerEligibleForPvP 
+local isPlayerEligibleForPvP
+local stopAllThreads -- forward declaration; real definition is further below 
 
 -- ==========================================
 -- DATABASE POSISI & TITIK TENGAH PULAU
@@ -124,6 +125,7 @@ local state = {
     manualSkipRequested = false,
     isHunting = false,
     uiHidden = false,
+    stopRequested = false,
 }
 
 -- UI is a table with { createNewLayoutUI, updateHUDDisplay, UIRefs },
@@ -143,7 +145,7 @@ end
 -- Lightweight sync loop: mirrors the real local variables into `state`
 -- every tick, and pulls back any UI-driven writes (like manualSkipRequested).
 task.spawn(function()
-    while true do
+    while not state.stopRequested do
         task.wait(0.1)
         state.currentTargetPlayer = currentTargetPlayer
         state.isHunting = isHunting
@@ -155,6 +157,38 @@ task.spawn(function()
         end
         state.manualSkipRequested = manualSkipRequested
     end
+end)
+
+-- Watcher: when the UI's "YA, HAPUS" confirm sets state.stopRequested = true,
+-- tear down every loop/connection this script owns. The UI closes/destroys
+-- itself separately; this just makes sure nothing keeps running headless.
+task.spawn(function()
+    while not state.stopRequested do
+        task.wait(0.2)
+    end
+
+    isHunting = false
+    stopAllThreads()
+
+    if combatConnection then combatConnection:Disconnect() end
+    if noclipConnection then noclipConnection:Disconnect() end
+    if sliderInputEndedConn then sliderInputEndedConn:Disconnect() end
+    if sliderInputChangedConn then sliderInputChangedConn:Disconnect() end
+
+    for player, esp in pairs(activeESP) do
+        pcall(function()
+            if esp.Gui then esp.Gui:Destroy() end
+        end)
+    end
+    activeESP = {}
+
+    pcall(function()
+        if workspace:FindFirstChild("AntiWaterPlatform") then
+            workspace.AntiWaterPlatform:Destroy()
+        end
+    end)
+
+    print("[Bounty Hunter] Script dihentikan lewat konfirmasi popup.")
 end)
 
 local function createNewLayoutUI()
@@ -768,7 +802,7 @@ end
 -- ==========================================
 -- HUNTING MAIN LOOP
 -- ==========================================
-local function stopAllThreads()
+stopAllThreads = function()
     if combatConnection then combatConnection:Disconnect() combatConnection = nil end
     if skillThread then task.cancel(skillThread) skillThread = nil end
     disableNoclip()

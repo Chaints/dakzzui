@@ -220,6 +220,9 @@ local function createNewLayoutUI()
     local hideBtn = headerButton("●", 10, 30)
     hideBtn.TextSize = 13
 
+    local stopBtn = headerButton("×", 46, 30)
+    stopBtn.TextSize = 17
+
     --==================================================
     -- DIVIDER
     --==================================================
@@ -539,19 +542,20 @@ local function createNewLayoutUI()
     end)
 
     --==================================================
-    -- CIRCULAR "ZD" LOGO (shown when dashboard is hidden;
-    -- tapping it brings the dashboard back. Script keeps running
-    -- the whole time since nothing is ever Destroy()'d here.)
+    -- CIRCULAR "ZD" LOGO (always visible from the start, floating
+    -- independently of the dashboard. Tapping it toggles the dashboard
+    -- show/hide, but the logo itself never disappears — script keeps
+    -- running the whole time since nothing gets Destroy()'d here.)
     --==================================================
     local logo = Instance.new("TextButton")
     logo.Name = "ZDLogo"
     logo.Size = UDim2.fromOffset(52, 52)
     logo.AnchorPoint = Vector2.new(0.5, 0.5)
-    logo.Position = UDim2.new(0.5, 0, 0.46, 0)
+    logo.Position = UDim2.new(1, -46, 0, 90)
     logo.BackgroundColor3 = BG
     logo.AutoButtonColor = false
     logo.Text = ""
-    logo.Visible = false
+    logo.Visible = true
     logo.ZIndex = 50
     logo.Parent = gui
     corner(logo, 26) -- perfect circle at 52x52
@@ -595,36 +599,44 @@ local function createNewLayoutUI()
     corner(logoStatusDot, 99)
     uistroke(logoStatusDot, BG, 2, 0)
 
-    local LOGO_FULL = UDim2.fromOffset(52, 52)
-    local LOGO_TINY = UDim2.fromOffset(6, 6)
     local MAIN_FULL = UDim2.fromOffset(390, 246)
     local MAIN_TINY = UDim2.fromOffset(6, 6)
 
-    local function hideToLogo()
+    -- Logo stays visible at all times; only `main` toggles. `logo` itself
+    -- never gets Visible = false, so it's always there to tap.
+    local function hideDashboard()
         state.uiHidden = true
         tween(main, 0.14, { Size = MAIN_TINY })
         task.delay(0.14, function()
             main.Visible = false
             main.Size = MAIN_FULL -- restore for next reopen
-
-            logo.Visible = true
-            logo.Size = LOGO_TINY
-            tween(logo, 0.16, { Size = LOGO_FULL })
+        end)
+        -- subtle pulse on the logo ring to hint "dashboard tucked in here"
+        tween(logo, 0.12, { Size = UDim2.fromOffset(58, 58) })
+        task.delay(0.12, function()
+            tween(logo, 0.12, { Size = UDim2.fromOffset(52, 52) })
         end)
     end
 
-    local function showFromLogo()
+    local function showDashboard()
         state.uiHidden = false
-        tween(logo, 0.1, { Size = LOGO_TINY })
-        task.delay(0.1, function()
-            logo.Visible = false
-            main.Visible = true
-            main.Size = MAIN_TINY
-            tween(main, 0.16, { Size = MAIN_FULL })
-        end)
+        main.Visible = true
+        main.Size = MAIN_TINY
+        tween(main, 0.16, { Size = MAIN_FULL })
     end
 
-    hideBtn.MouseButton1Click:Connect(hideToLogo)
+    local dashboardVisible = true
+
+    local function toggleDashboard()
+        dashboardVisible = not dashboardVisible
+        if dashboardVisible then
+            showDashboard()
+        else
+            hideDashboard()
+        end
+    end
+
+    hideBtn.MouseButton1Click:Connect(toggleDashboard)
 
     -- ---- logo drag (independent of main window; tap still opens it) ----
     local logoDragging = false
@@ -673,9 +685,9 @@ local function createNewLayoutUI()
 
     logo.MouseButton1Click:Connect(function()
         if logoMoved then
-            return -- was a drag, not a tap; don't reopen the dashboard
+            return -- was a drag, not a tap; don't toggle the dashboard
         end
-        showFromLogo()
+        toggleDashboard()
     end)
 
     -- keep the logo's status dot live even while the dashboard is hidden
@@ -688,6 +700,117 @@ local function createNewLayoutUI()
                 logoStatusDot.BackgroundColor3 = MUTED
             end
         end
+    end)
+
+    --==================================================
+    -- STOP CONFIRMATION POPUP (tombol X → Yes/No, bukan langsung destroy)
+    --==================================================
+    local confirmBackdrop = Instance.new("TextButton")
+    confirmBackdrop.Size = UDim2.fromScale(1, 1)
+    confirmBackdrop.BackgroundColor3 = Color3.new(0, 0, 0)
+    confirmBackdrop.BackgroundTransparency = 1
+    confirmBackdrop.Text = ""
+    confirmBackdrop.AutoButtonColor = false
+    confirmBackdrop.Visible = false
+    confirmBackdrop.ZIndex = 90
+    confirmBackdrop.Parent = gui
+
+    local confirmPopup = Instance.new("Frame")
+    confirmPopup.Size = UDim2.fromOffset(240, 140)
+    confirmPopup.AnchorPoint = Vector2.new(0.5, 0.5)
+    confirmPopup.Position = UDim2.new(0.5, 0, 0.46, 0)
+    confirmPopup.BackgroundColor3 = CARD
+    confirmPopup.BorderSizePixel = 0
+    confirmPopup.Visible = false
+    confirmPopup.ZIndex = 91
+    confirmPopup.Parent = gui
+    corner(confirmPopup, 14)
+    uistroke(confirmPopup, STROKE, 1, 0.15)
+    gradient(confirmPopup, Color3.fromRGB(27, 28, 34), Color3.fromRGB(18, 19, 23), 90)
+
+    local confirmTitle = Instance.new("TextLabel")
+    confirmTitle.Size = UDim2.new(1, -32, 0, 20)
+    confirmTitle.Position = UDim2.fromOffset(16, 18)
+    confirmTitle.BackgroundTransparency = 1
+    confirmTitle.Text = "Hapus Script?"
+    confirmTitle.TextColor3 = TEXT
+    confirmTitle.TextSize = 14
+    confirmTitle.Font = Enum.Font.GothamBold
+    confirmTitle.TextXAlignment = Enum.TextXAlignment.Left
+    confirmTitle.ZIndex = 92
+    confirmTitle.Parent = confirmPopup
+
+    local confirmDesc = Instance.new("TextLabel")
+    confirmDesc.Size = UDim2.new(1, -32, 0, 34)
+    confirmDesc.Position = UDim2.fromOffset(16, 42)
+    confirmDesc.BackgroundTransparency = 1
+    confirmDesc.Text = "Script akan berhenti total dan dashboard akan ditutup. Yakin?"
+    confirmDesc.TextColor3 = MUTED
+    confirmDesc.TextSize = 10
+    confirmDesc.Font = Enum.Font.Gotham
+    confirmDesc.TextXAlignment = Enum.TextXAlignment.Left
+    confirmDesc.TextWrapped = true
+    confirmDesc.ZIndex = 92
+    confirmDesc.Parent = confirmPopup
+
+    local function confirmButton(text, xOffset, bgColor, textColor)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0.5, -20, 0, 34)
+        b.Position = UDim2.new(0, xOffset, 1, -50)
+        b.BackgroundColor3 = bgColor
+        b.AutoButtonColor = false
+        b.Text = text
+        b.TextColor3 = textColor
+        b.TextSize = 11
+        b.Font = Enum.Font.GothamBold
+        b.ZIndex = 92
+        b.Parent = confirmPopup
+        corner(b, 9)
+        pressFeedback(b, bgColor, bgColor == RED and Color3.fromRGB(190, 75, 80) or CARD2)
+        return b
+    end
+
+    local yesBtn = confirmButton("YA, HAPUS", 16, RED, Color3.fromRGB(255, 255, 255))
+    local noBtn = confirmButton("BATAL", 128, CARD2, TEXT)
+    uistroke(noBtn, STROKE, 1, 0.4)
+
+    local function openConfirm()
+        confirmBackdrop.Visible = true
+        confirmPopup.Visible = true
+        confirmBackdrop.BackgroundTransparency = 1
+        confirmPopup.Size = UDim2.fromOffset(220, 126)
+
+        tween(confirmBackdrop, 0.15, { BackgroundTransparency = 0.5 })
+        tween(confirmPopup, 0.16, { Size = UDim2.fromOffset(240, 140) })
+    end
+
+    local function closeConfirm()
+        tween(confirmBackdrop, 0.15, { BackgroundTransparency = 1 })
+        local t = tween(
+            confirmPopup,
+            0.14,
+            { Size = UDim2.fromOffset(220, 126) },
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.In
+        )
+        t.Completed:Connect(function()
+            confirmPopup.Visible = false
+            confirmBackdrop.Visible = false
+        end)
+    end
+
+    stopBtn.MouseButton1Click:Connect(openConfirm)
+    confirmBackdrop.MouseButton1Click:Connect(closeConfirm)
+    noBtn.MouseButton1Click:Connect(closeConfirm)
+
+    yesBtn.MouseButton1Click:Connect(function()
+        state.stopRequested = true -- auto.lua polls this to kill its own loops/connections
+        closeConfirm()
+        tween(main, 0.14, { Size = UDim2.fromOffset(6, 6) })
+        tween(logo, 0.14, { Size = UDim2.fromOffset(6, 6) })
+        task.delay(0.14, function()
+            gui:Destroy()
+        end)
     end)
 
     --==================================================
