@@ -217,11 +217,8 @@ local function createNewLayoutUI()
         return b
     end
 
-    local closeBtnHeader = headerButton("×", 10, 30)
-    closeBtnHeader.TextSize = 17
-
-    local minBtn = headerButton("—", 46, 30)
-    minBtn.TextSize = 14
+    local hideBtn = headerButton("●", 10, 30)
+    hideBtn.TextSize = 13
 
     --==================================================
     -- DIVIDER
@@ -542,35 +539,155 @@ local function createNewLayoutUI()
     end)
 
     --==================================================
-    -- MINIMIZE
+    -- CIRCULAR "ZD" LOGO (shown when dashboard is hidden;
+    -- tapping it brings the dashboard back. Script keeps running
+    -- the whole time since nothing is ever Destroy()'d here.)
     --==================================================
-    local minimized = false
-    local contentChildren = { left, info, speedRow, divider }
+    local logo = Instance.new("TextButton")
+    logo.Name = "ZDLogo"
+    logo.Size = UDim2.fromOffset(52, 52)
+    logo.AnchorPoint = Vector2.new(0.5, 0.5)
+    logo.Position = UDim2.new(0.5, 0, 0.46, 0)
+    logo.BackgroundColor3 = BG
+    logo.AutoButtonColor = false
+    logo.Text = ""
+    logo.Visible = false
+    logo.ZIndex = 50
+    logo.Parent = gui
+    corner(logo, 26) -- perfect circle at 52x52
+    uistroke(logo, STROKE, 1, 0.15)
+    gradient(logo, Color3.fromRGB(20, 21, 26), Color3.fromRGB(13, 14, 17), 90)
 
-    minBtn.MouseButton1Click:Connect(function()
-        minimized = not minimized
+    local logoZ = Instance.new("TextLabel")
+    logoZ.Size = UDim2.fromOffset(36, 36)
+    logoZ.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoZ.Position = UDim2.new(0.5, -5, 0.5, -2)
+    logoZ.BackgroundTransparency = 1
+    logoZ.Text = "Z"
+    logoZ.TextColor3 = ACCENT
+    logoZ.TextTransparency = 0.15
+    logoZ.TextSize = 22
+    logoZ.Font = Enum.Font.GothamBlack
+    logoZ.ZIndex = 51
+    logoZ.Parent = logo
 
-        if minimized then
-            for _, child in ipairs(contentChildren) do
-                child.Visible = false
-            end
-            tween(main, 0.16, { Size = UDim2.fromOffset(390, 46) })
-        else
-            for _, child in ipairs(contentChildren) do
-                child.Visible = true
-            end
-            tween(main, 0.16, { Size = UDim2.fromOffset(390, 246) })
+    local logoD = Instance.new("TextLabel")
+    logoD.Size = UDim2.fromOffset(36, 36)
+    logoD.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoD.Position = UDim2.new(0.5, 6, 0.5, 3)
+    logoD.BackgroundTransparency = 1
+    logoD.Text = "D"
+    logoD.TextColor3 = TEXT
+    logoD.TextSize = 22
+    logoD.Font = Enum.Font.GothamBlack
+    logoD.ZIndex = 52
+    logoD.Parent = logo
+
+    -- small live status dot on the logo, mirrors state.isHunting
+    local logoStatusDot = Instance.new("Frame")
+    logoStatusDot.Size = UDim2.fromOffset(9, 9)
+    logoStatusDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoStatusDot.Position = UDim2.new(1, -8, 0, 8)
+    logoStatusDot.BackgroundColor3 = MUTED
+    logoStatusDot.BorderSizePixel = 0
+    logoStatusDot.ZIndex = 53
+    logoStatusDot.Parent = logo
+    corner(logoStatusDot, 99)
+    uistroke(logoStatusDot, BG, 2, 0)
+
+    local LOGO_FULL = UDim2.fromOffset(52, 52)
+    local LOGO_TINY = UDim2.fromOffset(6, 6)
+    local MAIN_FULL = UDim2.fromOffset(390, 246)
+    local MAIN_TINY = UDim2.fromOffset(6, 6)
+
+    local function hideToLogo()
+        state.uiHidden = true
+        tween(main, 0.14, { Size = MAIN_TINY })
+        task.delay(0.14, function()
+            main.Visible = false
+            main.Size = MAIN_FULL -- restore for next reopen
+
+            logo.Visible = true
+            logo.Size = LOGO_TINY
+            tween(logo, 0.16, { Size = LOGO_FULL })
+        end)
+    end
+
+    local function showFromLogo()
+        state.uiHidden = false
+        tween(logo, 0.1, { Size = LOGO_TINY })
+        task.delay(0.1, function()
+            logo.Visible = false
+            main.Visible = true
+            main.Size = MAIN_TINY
+            tween(main, 0.16, { Size = MAIN_FULL })
+        end)
+    end
+
+    hideBtn.MouseButton1Click:Connect(hideToLogo)
+
+    -- ---- logo drag (independent of main window; tap still opens it) ----
+    local logoDragging = false
+    local logoDragStart
+    local logoStartPos
+    local logoMoved = false
+    local LOGO_DRAG_THRESHOLD = 6 -- pixels of movement before it counts as a drag, not a tap
+
+    logo.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            logoDragging = true
+            logoMoved = false
+            logoDragStart = input.Position
+            logoStartPos = logo.Position
         end
     end)
 
-    --==================================================
-    -- CLOSE (destroys the dashboard only; script keeps running in background)
-    --==================================================
-    closeBtnHeader.MouseButton1Click:Connect(function()
-        tween(main, 0.14, { Size = UDim2.fromOffset(6, 6) })
-        task.delay(0.14, function()
-            gui:Destroy()
-        end)
+    logo.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            logoDragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if not logoDragging then return end
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - logoDragStart
+
+            if math.abs(delta.X) > LOGO_DRAG_THRESHOLD or math.abs(delta.Y) > LOGO_DRAG_THRESHOLD then
+                logoMoved = true
+            end
+
+            if logoMoved then
+                logo.Position = UDim2.new(
+                    logoStartPos.X.Scale,
+                    logoStartPos.X.Offset + delta.X,
+                    logoStartPos.Y.Scale,
+                    logoStartPos.Y.Offset + delta.Y
+                )
+            end
+        end
+    end)
+
+    logo.MouseButton1Click:Connect(function()
+        if logoMoved then
+            return -- was a drag, not a tap; don't reopen the dashboard
+        end
+        showFromLogo()
+    end)
+
+    -- keep the logo's status dot live even while the dashboard is hidden
+    task.spawn(function()
+        while gui.Parent do
+            task.wait(0.3)
+            if state.isHunting then
+                logoStatusDot.BackgroundColor3 = state.currentTargetPlayer and RED or GREEN
+            else
+                logoStatusDot.BackgroundColor3 = MUTED
+            end
+        end
     end)
 
     --==================================================
@@ -734,7 +851,6 @@ local LocalPlayer = game:GetService("Players").LocalPlayer
 
 local function updateHUDDisplay(player)
     pcall(function()
-        createNewLayoutUI()
         if not UIRefs.infoValues then return end
         local iv = UIRefs.infoValues
 

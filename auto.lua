@@ -123,6 +123,7 @@ local state = {
     manualSkipList = manualSkipList,   -- same table reference, mutations are shared automatically
     manualSkipRequested = false,
     isHunting = false,
+    uiHidden = false,
 }
 
 -- UI is a table with { createNewLayoutUI, updateHUDDisplay, UIRefs },
