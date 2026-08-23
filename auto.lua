@@ -832,6 +832,14 @@ local function startHuntingLoop()
                 autoOnHakiAndInstinct()
                 
                 if not currentTargetPlayer then
+                    -- Skip was already processed (currentTargetPlayer got nil'd below
+                    -- when we broke out of the fight loop). Clear the flag here,
+                    -- regardless of whether a new target is found this tick — otherwise
+                    -- manualSkipRequested stays stuck true forever whenever there's no
+                    -- other eligible player, causing the fly/combat loop to keep
+                    -- starting and immediately self-cancelling (the "jalan-mati-jalan-mati" bug).
+                    manualSkipRequested = false
+
                     for _, player in pairs(Players:GetPlayers()) do
                         if isPlayerEligibleForPvP(player) then
                             local targetRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -839,7 +847,6 @@ local function startHuntingLoop()
                             
                             if targetRoot and targetHumanoid then
                                 currentTargetPlayer = player
-                                manualSkipRequested = false
                                 hasTeleportedToIsland = false
                                 updateHUDDisplay(player)
                                 applyTargetHighlight(player.Character)

@@ -217,8 +217,8 @@ local function createNewLayoutUI()
         return b
     end
 
-    local hideBtn = headerButton("●", 10, 30)
-    hideBtn.TextSize = 13
+    local hideBtn = headerButton("><", 10, 34)
+    hideBtn.TextSize = 11
 
     local stopBtn = headerButton("×", 46, 30)
     stopBtn.TextSize = 17
@@ -551,7 +551,7 @@ local function createNewLayoutUI()
     logo.Name = "ZDLogo"
     logo.Size = UDim2.fromOffset(52, 52)
     logo.AnchorPoint = Vector2.new(0.5, 0.5)
-    logo.Position = UDim2.new(1, -46, 0, 90)
+    logo.Position = UDim2.new(0, 46, 0, 90)
     logo.BackgroundColor3 = BG
     logo.AutoButtonColor = false
     logo.Text = ""
@@ -600,39 +600,51 @@ local function createNewLayoutUI()
     uistroke(logoStatusDot, BG, 2, 0)
 
     local MAIN_FULL = UDim2.fromOffset(390, 246)
-    local MAIN_TINY = UDim2.fromOffset(6, 6)
+    local MAIN_COLLAPSED = UDim2.fromOffset(150, 46) -- just enough to show the title text
 
-    -- Logo stays visible at all times; only `main` toggles. `logo` itself
-    -- never gets Visible = false, so it's always there to tap.
-    local function hideDashboard()
+    -- Logo is always visible and independent of this collapse/expand toggle.
+    -- Collapsing just shrinks `main` down to a title-only strip; it never
+    -- gets Visible = false or Destroy()'d, so nothing about the script stops.
+    local contentChildren = { left, info, speedRow, divider }
+    local headerExtras = { accentBar, subtitleRow, statusBtn }
+
+    local TITLE_FULL_SIZE = UDim2.new(1, -140, 0, 18)
+    local TITLE_COLLAPSED_SIZE = UDim2.new(1, -70, 0, 18) -- room for the header buttons only
+
+    local function collapseDashboard()
         state.uiHidden = true
-        tween(main, 0.14, { Size = MAIN_TINY })
-        task.delay(0.14, function()
-            main.Visible = false
-            main.Size = MAIN_FULL -- restore for next reopen
-        end)
-        -- subtle pulse on the logo ring to hint "dashboard tucked in here"
-        tween(logo, 0.12, { Size = UDim2.fromOffset(58, 58) })
-        task.delay(0.12, function()
-            tween(logo, 0.12, { Size = UDim2.fromOffset(52, 52) })
-        end)
+        for _, child in ipairs(contentChildren) do
+            child.Visible = false
+        end
+        for _, extra in ipairs(headerExtras) do
+            extra.Visible = false
+        end
+        title.Position = UDim2.fromOffset(14, 8)
+        title.Size = TITLE_COLLAPSED_SIZE
+        tween(main, 0.16, { Size = MAIN_COLLAPSED })
     end
 
-    local function showDashboard()
+    local function expandDashboard()
         state.uiHidden = false
-        main.Visible = true
-        main.Size = MAIN_TINY
+        for _, child in ipairs(contentChildren) do
+            child.Visible = true
+        end
+        for _, extra in ipairs(headerExtras) do
+            extra.Visible = true
+        end
+        title.Position = UDim2.fromOffset(26, 8)
+        title.Size = TITLE_FULL_SIZE
         tween(main, 0.16, { Size = MAIN_FULL })
     end
 
-    local dashboardVisible = true
+    local dashboardCollapsed = false
 
     local function toggleDashboard()
-        dashboardVisible = not dashboardVisible
-        if dashboardVisible then
-            showDashboard()
+        dashboardCollapsed = not dashboardCollapsed
+        if dashboardCollapsed then
+            collapseDashboard()
         else
-            hideDashboard()
+            expandDashboard()
         end
     end
 
@@ -690,7 +702,7 @@ local function createNewLayoutUI()
         toggleDashboard()
     end)
 
-    -- keep the logo's status dot live even while the dashboard is hidden
+    -- keep the logo's status dot live at all times, collapsed or not
     task.spawn(function()
         while gui.Parent do
             task.wait(0.3)
