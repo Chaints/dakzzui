@@ -33,6 +33,8 @@ local RED       = Color3.fromRGB(225, 95, 100)
 
 -- ---- helpers ----
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local function corner(obj, radius)
     local c = Instance.new("UICorner")

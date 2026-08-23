@@ -27,8 +27,24 @@ backdrop.BorderSizePixel = 0
 backdrop.ZIndex = 0
 backdrop.Parent = gui
 
+local cellSize = 12
+local gap = 3
+local colUnit = cellSize + gap
+
+-- Layout offsets (in cell-columns) so Z, x, D sit side by side with spacing
+local Z_OFFSET = 0   -- columns 0-3
+local X_OFFSET = 5   -- columns 5-7 (small, centered gap after Z)
+local D_OFFSET = 9   -- columns 9-12
+
+-- Total pattern width/height computed from the grid itself (not guessed),
+-- so `holder` truly centers the assembled "Z x D" logo on screen.
+local PATTERN_COLS = D_OFFSET + 4 -- D is 4 columns wide, starts at D_OFFSET
+local PATTERN_ROWS = 5            -- Z, X, D are all 5 rows tall
+local patternWidth = PATTERN_COLS * colUnit - gap
+local patternHeight = PATTERN_ROWS * colUnit - gap
+
 local holder = Instance.new("Frame")
-holder.Size = UDim2.fromOffset(230, 80)
+holder.Size = UDim2.fromOffset(patternWidth, patternHeight)
 holder.Position = UDim2.fromScale(0.5, 0.5)
 holder.AnchorPoint = Vector2.new(0.5, 0.5)
 holder.BackgroundTransparency = 1
@@ -66,15 +82,6 @@ local D = {
 }
 
 local cells = {}
-
-local cellSize = 12
-local gap = 3
-local colUnit = cellSize + gap
-
--- Layout offsets (in cell-columns) so Z, x, D sit side by side with spacing
-local Z_OFFSET = 0   -- columns 0-3
-local X_OFFSET = 5   -- columns 5-7 (small, centered gap after Z)
-local D_OFFSET = 9   -- columns 9-12
 
 local function createCell(colOffset, x, y)
 	local cell = Instance.new("Frame")
@@ -146,7 +153,7 @@ local function shuffle(tbl)
 	end
 end
 
-math.randomseed(os.clock() * 100000)
+math.randomseed(tick() * 1000)
 shuffle(cells)
 
 -- ==========================================
