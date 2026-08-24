@@ -102,7 +102,7 @@ if not _G.ServerScannerInitialized then
             print("[HOP DEBUG] __ServerBrowser ditemukan:", serverBrowser:GetFullName(), "| ClassName:", serverBrowser.ClassName)
         end
 
-        local currentPage = 85
+        local currentPage = 40
         local maxPages = 300
         local targetQueueSize = 2
 
