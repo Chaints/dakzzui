@@ -806,17 +806,26 @@ local function handleSmartPortalBypass(targetRoot)
             enableNoclip()
             local npcLuariPos = Vector3.new(-16270.20, 25.25, 1372.97)
             smoothMoveToTarget(npcLuariPos, _G.CustomFlightSpeed)
+            print("[SUBMERGED DEBUG] Sampai di posisi NPC luar. Jarak aktual:", (LocalPlayer.Character.HumanoidRootPart.Position - npcLuariPos).Magnitude)
             
             task.wait(3.0) 
-            pcall(function()
+            local ok, result = pcall(function()
                 local modulesNet = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
-                if modulesNet then
-                    local subWorkerSpeak = modulesNet:FindFirstChild("RF/SubmarineWorkerSpeak")
-                    if subWorkerSpeak then
-                        subWorkerSpeak:InvokeServer("TravelToSubmergedIsland")
-                    end
+                if not modulesNet then
+                    print("[SUBMERGED DEBUG] ReplicatedStorage.Modules.Net TIDAK DITEMUKAN")
+                    return
                 end
+                local subWorkerSpeak = modulesNet:FindFirstChild("RF/SubmarineWorkerSpeak")
+                if not subWorkerSpeak then
+                    print("[SUBMERGED DEBUG] Remote RF/SubmarineWorkerSpeak TIDAK DITEMUKAN di Modules.Net")
+                    return
+                end
+                local response = subWorkerSpeak:InvokeServer("TravelToSubmergedIsland")
+                print("[SUBMERGED DEBUG] InvokeServer TravelToSubmergedIsland response:", tostring(response))
             end)
+            if not ok then
+                print("[SUBMERGED DEBUG] pcall error saat invoke masuk:", result)
+            end
             task.wait(3.0) 
         end)
         return
@@ -828,17 +837,26 @@ local function handleSmartPortalBypass(targetRoot)
             enableNoclip()
             local npcDalamPos = Vector3.new(11421.99, -2154.80, 9728.17)
             smoothMoveToTarget(npcDalamPos, _G.CustomFlightSpeed)
+            print("[SUBMERGED DEBUG] Sampai di posisi NPC dalam. Jarak aktual:", (LocalPlayer.Character.HumanoidRootPart.Position - npcDalamPos).Magnitude)
             
             task.wait(3.0) 
-            pcall(function()
+            local ok, result = pcall(function()
                 local modulesNet = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
-                if modulesNet then
-                    local subTransport = modulesNet:FindFirstChild("RF/SubmarineTransportation")
-                    if subTransport then
-                        subTransport:InvokeServer("InitiateTeleport", "Tiki Outpost")
-                    end
+                if not modulesNet then
+                    print("[SUBMERGED DEBUG] ReplicatedStorage.Modules.Net TIDAK DITEMUKAN")
+                    return
                 end
+                local subTransport = modulesNet:FindFirstChild("RF/SubmarineTransportation")
+                if not subTransport then
+                    print("[SUBMERGED DEBUG] Remote RF/SubmarineTransportation TIDAK DITEMUKAN di Modules.Net")
+                    return
+                end
+                local response = subTransport:InvokeServer("InitiateTeleport", "Tiki Outpost")
+                print("[SUBMERGED DEBUG] InvokeServer InitiateTeleport response:", tostring(response))
             end)
+            if not ok then
+                print("[SUBMERGED DEBUG] pcall error saat invoke keluar:", result)
+            end
             task.wait(3.0) 
         end)
         return
