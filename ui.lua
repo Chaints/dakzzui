@@ -1012,19 +1012,32 @@ local function createNewLayoutUI()
         while gui.Parent do
             task.wait(0.2)
 
-            if infoValues["JARAK"] and state.currentTargetPlayer and state.currentTargetPlayer.Parent then
-                pcall(function()
+            if not infoValues["JARAK"] then
+                -- infoValues["JARAK"] missing entirely; shouldn't happen but log once if so
+            elseif not state.currentTargetPlayer then
+                -- no active target right now, nothing to update
+            elseif not state.currentTargetPlayer.Parent then
+                print("[JARAK DEBUG] state.currentTargetPlayer.Parent is nil (target left?), skipping update")
+            else
+                local ok, err = pcall(function()
                     local LocalPlayer = game:GetService("Players").LocalPlayer
                     local myChar = LocalPlayer.Character
                     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
                     local targetChar = state.currentTargetPlayer.Character
                     local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
 
-                    if myRoot and targetRoot then
+                    if not myRoot then
+                        print("[JARAK DEBUG] myRoot nil (LocalPlayer character/HRP missing)")
+                    elseif not targetRoot then
+                        print("[JARAK DEBUG] targetRoot nil (target character/HRP missing)")
+                    else
                         local d = (myRoot.Position - targetRoot.Position).Magnitude
                         infoValues["JARAK"].Text = tostring(math.floor(d)) .. " studs"
                     end
                 end)
+                if not ok then
+                    print("[JARAK DEBUG] pcall error:", err)
+                end
             end
         end
     end)
