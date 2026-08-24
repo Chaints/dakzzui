@@ -757,31 +757,42 @@ local function smoothMoveToTarget(destinationPos, speed)
     if not root then return end
 
     enableNoclip()
-    
-    local startTime = tick()
-    local startPos = root.Position
-    local distance = (destinationPos - startPos).Magnitude
-    local duration = distance / speed
-    
-    while task.wait() do
+
+    -- Move in fixed per-frame steps capped by `speed` (studs/second),
+    -- instead of a global time-based lerp. A time-based lerp can "jump"
+    -- a large distance in one frame if there's a lag spike (elapsed time
+    -- balloons, so the interpolated position skips far ahead) — the
+    -- server's anti-cheat sees that as an impossible movement and
+    -- rubber-bands the character back, which is what was causing the
+    -- "sampai NPC lalu balik lagi" bug.
+    while true do
+        local dt = task.wait()
         if not isHunting then break end
-        
+
         local currentPos = root.Position
-        local currentDist = (destinationPos - currentPos).Magnitude
-        
-        if currentDist < 8 then 
+        local toTarget = destinationPos - currentPos
+        local currentDist = toTarget.Magnitude
+
+        if currentDist < 6 then
             root.CFrame = CFrame.new(destinationPos)
-            break 
+            break
         end
-        
-        local elapsed = tick() - startTime
-        local alpha = math.clamp(elapsed / duration, 0, 1)
-        
-        local newPos = startPos:Lerp(destinationPos, alpha)
+
+        dt = math.min(dt or (1/60), 1/30) -- clamp dt so a lag spike can't produce a huge step
+
+        local stepDistance = math.min(speed * dt, currentDist)
+        local direction = toTarget.Unit
+        local newPos = currentPos + direction * stepDistance
+
         root.CFrame = CFrame.new(newPos) * CFrame.lookAt(newPos, destinationPos).Rotation
         root.Velocity = Vector3.new(0, 0, 0)
         root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     end
+
+    -- Let the server catch up / validate the final position before any
+    -- caller immediately fires a remote that depends on server-side
+    -- proximity checks (e.g. talking to the submerged island NPC).
+    task.wait(0.5)
 end
 
 local function handleSmartPortalBypass(targetRoot)
