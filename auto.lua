@@ -1,4 +1,4 @@
-print("[Bounty Hunter] Menjalankan inisialisasi awal (Scan Server Halaman 1-200, Max 5)...")
+print("[Bounty Hunter] Menjalankan inisialisasi awal (Persistent Server Hop & Blacklist 15m)...")
 
 -- ==========================================
 -- SMART UI PARENTING (ANTI-CRASH)
@@ -29,7 +29,7 @@ pcall(function()
 end)
 
 -- ==========================================
--- GLOBAL VARIABLES & SERVICES
+-- GLOBAL SERVICES
 -- ==========================================
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
@@ -48,19 +48,21 @@ local RegisterAttack = NetFolder:WaitForChild("RE/RegisterAttack")
 local RegisterHit = NetFolder:WaitForChild("RE/RegisterHit")
 
 local JedaSenjataAsli = 0.4000000059604645
-local TokenKeamanan = "083cf9b7" -- ⚠️ Ganti dengan token terbaru jika darah tidak berkurang
+local TokenKeamanan = "083cf9b7" -- ⚠️ Ganti dengan token terbaru jika darah tidak berkurang[cite: 5]
 
 local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
 local CommF = RemotesFolder and RemotesFolder:WaitForChild("CommF_", 3)
 local CommE = RemotesFolder and RemotesFolder:WaitForChild("CommE", 3)
-local ClockFolder = RemotesFolder and RemotesFolder:FindFirstChild("Clock")
+local ClockFolder = ReplicatedStorage:FindFirstChild("Clock")
 local MasterClockRemote = ClockFolder and ClockFolder:WaitForChild("DelayedRequestFunction", 3)
 
--- PARAMETER UTAMA 
+-- PARAMETER UTAMA & AKUMULASI HADIAH
 _G.CustomFlightSpeed = 300     
 local M1_ATTACK_RANGE = 17.0   -- Jangkauan khusus Fast M1 (Pukul dekat)
-local SKILL_ATTACK_RANGE = 10.0 -- Jangkauan khusus Auto Skill (Diatur ke 10.0)
+local SKILL_ATTACK_RANGE = 10.0 -- Jangkauan khusus Auto Skill
 local MAGNET_RANGE = 8.0       
+
+local totalHadiahDiperoleh = 0  
 
 -- VARIABEL STATE
 local combatConnection = nil
@@ -73,12 +75,58 @@ local hasTeleportedToIsland = false
 local isHunting = false
 
 local manualSkipList = {} 
-local bountyBlacklist = {} 
+local bountyBlacklist = {} -- Menyimpan durasi blacklist (15 menit = 900 detik)
 local activeESP = {}
 
 local sliderInputChangedConn = nil
 local sliderInputEndedConn = nil
 local isPlayerEligibleForPvP 
+local isTargetInActiveFight = false -- Flag penanda sedang bertarung dengan target
+
+-- ==========================================
+-- PERSISTENT SERVER HOP QUEUE (GLOBAL / NON-RESET)
+-- ==========================================
+_G.PersistentReadyJobIds = _G.PersistentReadyJobIds or {}
+local isHoppingNow = false
+
+-- Jalankan background scanner sekali saja secara global agar tidak kereset saat mati/respawn
+if not _G.ServerScannerInitialized then
+    _G.ServerScannerInitialized = true
+    task.spawn(function()
+        local serverBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser", 5)
+        local currentPage = 1
+        local maxPages = 200
+        
+        while task.wait(0.3) do
+            if #_G.PersistentReadyJobIds >= 2 or currentPage > maxPages then
+                break 
+            end
+
+            if serverBrowser then
+                local success, servers = pcall(function() return serverBrowser:InvokeServer(currentPage) end)
+                
+                if success and type(servers) == "table" then
+                    for jobId, serverData in pairs(servers) do
+                        local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
+                        
+                        if count > 0 and count < 9 and jobId ~= game.JobId then
+                            local alreadyInQueue = false
+                            for _, qId in ipairs(_G.PersistentReadyJobIds) do
+                                if qId == jobId then alreadyInQueue = true break end
+                            end
+                            
+                            if not alreadyInQueue then
+                                table.insert(_G.PersistentReadyJobIds, jobId)
+                                if #_G.PersistentReadyJobIds >= 2 then break end
+                            end
+                        end
+                    end
+                end
+                currentPage = currentPage + 1
+            end
+        end
+    end)
+end
 
 -- ==========================================
 -- DATABASE POSISI & TITIK TENGAH PULAU (SEA 3)
@@ -430,19 +478,29 @@ end
 isPlayerEligibleForPvP = function(targetPlayer)
     if not targetPlayer or not targetPlayer.Parent or not targetPlayer:IsA("Player") or targetPlayer == LocalPlayer then return false end
     
+    -- JIKA SUDAH DALAM STATUS FIGHT, ABAIKAN SAFE ZONE & PVP DISABLED (KEJAR TERUS SAMPAI MATI)
+    if isTargetInActiveFight and targetPlayer == currentTargetPlayer then
+        local char = targetPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        if char and hum and hum.Health > 0 then
+            return true
+        end
+    end
+
     local dataFolder = targetPlayer:FindFirstChild("Data")
     if manualSkipList[targetPlayer.Name] then return false end
     
+    -- Blacklist durasi 15 menit (900 detik)
     if bountyBlacklist[targetPlayer.Name] and os.time() < bountyBlacklist[targetPlayer.Name] then 
         return false 
     end
     
     if targetPlayer:FindFirstChild("DiedRecently") then 
-        bountyBlacklist[targetPlayer.Name] = os.time() + 120
+        bountyBlacklist[targetPlayer.Name] = os.time() + 900
         return false 
     end
     if targetPlayer:FindFirstChild("PlayerStats") and targetPlayer.PlayerStats:FindFirstChild("DiedRecently") then 
-        bountyBlacklist[targetPlayer.Name] = os.time() + 120
+        bountyBlacklist[targetPlayer.Name] = os.time() + 900
         return false 
     end
     
@@ -454,7 +512,7 @@ isPlayerEligibleForPvP = function(targetPlayer)
     if not humanoid or humanoid.Health <= 0 or not root then return false end
     
     if char:FindFirstChild("DiedRecently") then 
-        bountyBlacklist[targetPlayer.Name] = os.time() + 120
+        bountyBlacklist[targetPlayer.Name] = os.time() + 900
         return false 
     end
     if char:FindFirstChildOfClass("ForceField") then return false end
@@ -470,7 +528,7 @@ isPlayerEligibleForPvP = function(targetPlayer)
         if safeZoneVal and safeZoneVal.Value == true then return false end
         
         local pvpVal = dataFolder:FindFirstChild("PvP") or dataFolder:FindFirstChild("PvPDisabled") or dataFolder:FindFirstChild("PvpDisabled")
-        if pvpVal and (pvpVal.Value == false or (pvpVal.Value == true and pvpVal.Name:lower():find("disabled"))) then return false end
+        if pvpVal and (pvpVal.Value == false or (pvpVal.Value == true and pvpVal.Name:lower().find("disabled"))) then return false end
     end
 
     if isAlly(targetPlayer) or isBuddhaOrPortalUser(targetPlayer) then return false end
@@ -489,7 +547,7 @@ isPlayerEligibleForPvP = function(targetPlayer)
 end
 
 -- ==========================================
--- FAST M1 KILL AURA (MENGGUNAKAN M1_ATTACK_RANGE)
+-- FAST M1 KILL AURA (HANYA AKTIF DI RANGE 80% - 50% HP)
 -- ==========================================
 local function startM1Loop(targetPlayer)
     if m1Thread then task.cancel(m1Thread) m1Thread = nil end
@@ -500,22 +558,30 @@ local function startM1Loop(targetPlayer)
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local tChar = targetPlayer and targetPlayer.Character
             local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
 
-            if myRoot and tRoot then
-                local dist = (myRoot.Position - tRoot.Position).Magnitude
+            if myRoot and tRoot and tHum and tHum.MaxHealth > 0 then
+                local currentHPPercent = (tHum.Health / tHum.MaxHealth) * 100
                 
-                if dist <= M1_ATTACK_RANGE then
-                    for comboKe = 1, 4 do
-                        RegisterAttack:FireServer(JedaSenjataAsli, comboKe)
-                        
-                        local partTarget = tRoot or tChar:FindFirstChild("UpperTorso")
-                        if partTarget then
-                            local argsHit = {
-                                [1] = partTarget,
-                                [2] = {},
-                                [4] = TokenKeamanan
-                            }
-                            RegisterHit:FireServer(unpack(argsHit))
+                -- Hanya aktif di antara 80% sampai 50% HP
+                if currentHPPercent <= 80 and currentHPPercent >= 50 then
+                    isTargetInActiveFight = true
+                    equipWeaponCategory("Melee")
+                    
+                    local dist = (myRoot.Position - tRoot.Position).Magnitude
+                    if dist <= M1_ATTACK_RANGE then
+                        for comboKe = 1, 4 do
+                            RegisterAttack:FireServer(JedaSenjataAsli, comboKe)
+                            
+                            local partTarget = tRoot or tChar:FindFirstChild("UpperTorso")
+                            if partTarget then
+                                local argsHit = {
+                                    [1] = partTarget,
+                                    [2] = {},
+                                    [4] = TokenKeamanan
+                                }
+                                RegisterHit:FireServer(unpack(argsHit))
+                            end
                         end
                     end
                 end
@@ -526,7 +592,7 @@ local function startM1Loop(targetPlayer)
 end
 
 -- ==========================================
--- INSTANT SKILL COMBO (MENGGUNAKAN SKILL_ATTACK_RANGE)
+-- INSTANT SKILL COMBO (AKTIF DI 100-80% & < 50% HP)
 -- ==========================================
 local function executeToolRemote(targetPosition, skillType)
     pcall(function()
@@ -566,7 +632,6 @@ local function startSkillLoop(targetPlayer)
     skillThread = task.spawn(function()
         local weaponCategories = {"Melee", "Fruit", "Sword", "Gun"}
         local skillKeys = {"Z", "X", "C", "V"}
-        
         local noVFruits = {"tiger", "yeti", "mammoth", "trex", "t-rex", "kitsune", "dragon", "gas", "buddha", "phoenix", "venom"}
 
         pcall(function()
@@ -579,38 +644,43 @@ local function startSkillLoop(targetPlayer)
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local tChar = targetPlayer and targetPlayer.Character
             local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
 
-            if myRoot and tRoot then
-                local dist = (myRoot.Position - tRoot.Position).Magnitude
+            if myRoot and tRoot and tHum and tHum.MaxHealth > 0 then
+                local currentHPPercent = (tHum.Health / tHum.MaxHealth) * 100
                 
-                if dist <= SKILL_ATTACK_RANGE then 
-                    autoOnHakiAndInstinct()
-                    activateRaceV3AndV4()
+                -- Aktif saat 100-80% HP ATAU di bawah 50% HP
+                if (currentHPPercent > 80 and currentHPPercent <= 100) or (currentHPPercent < 50) then
+                    isTargetInActiveFight = true
+                    local dist = (myRoot.Position - tRoot.Position).Magnitude
+                    if dist <= SKILL_ATTACK_RANGE then 
+                        autoOnHakiAndInstinct()
+                        activateRaceV3AndV4()
 
-                    for _, category in ipairs(weaponCategories) do
-                        if not currentTargetPlayer or not isPlayerEligibleForPvP(currentTargetPlayer) then break end
-                        
-                        local equippedTool = equipWeaponCategory(category)
-                        
-                        if equippedTool then
-                            local targetPos = tRoot.Position
-                            local toolName = equippedTool.Name:lower()
+                        for _, category in ipairs(weaponCategories) do
+                            if not currentTargetPlayer or not isPlayerEligibleForPvP(currentTargetPlayer) then break end
                             
-                            local isTransformFruit = false
-                            if category == "Fruit" then
-                                for _, fruitName in ipairs(noVFruits) do
-                                    if toolName:find(fruitName) then
-                                        isTransformFruit = true
-                                        break
+                            local equippedTool = equipWeaponCategory(category)
+                            
+                            if equippedTool then
+                                local targetPos = tRoot.Position
+                                local toolName = equippedTool.Name:lower()
+                                
+                                local isTransformFruit = false
+                                if category == "Fruit" then
+                                    for _, fruitName in ipairs(noVFruits) do
+                                        if toolName:find(fruitName) then
+                                            isTransformFruit = true
+                                            break
+                                        end
                                     end
                                 end
-                            end
-                            
-                            for _, key in ipairs(skillKeys) do
-                                if key == "V" and isTransformFruit then
-                                    -- Lewati Skill V agar tidak transform
-                                else
-                                    executeToolRemote(targetPos, key)
+                                
+                                for _, key in ipairs(skillKeys) do
+                                    if key == "V" and isTransformFruit then
+                                    else
+                                        executeToolRemote(targetPos, key)
+                                    end
                                 end
                             end
                         end
@@ -849,6 +919,7 @@ local function stopAllThreads()
     
     if currentTargetPlayer and currentTargetPlayer.Character then removeTargetHighlight(currentTargetPlayer.Character) end
     currentTargetPlayer = nil 
+    isTargetInActiveFight = false -- Reset status fight
     pcall(function() if workspace:FindFirstChild("AntiWaterPlatform") then workspace.AntiWaterPlatform:Destroy() end end)
 end
 _G.BH_StopAllThreads = stopAllThreads
@@ -876,6 +947,7 @@ local function startHuntingLoop()
                                 currentTargetPlayer = player
                                 manualSkipRequested = false
                                 hasTeleportedToIsland = false
+                                isTargetInActiveFight = false
                                 updateHUDDisplay(player)
                                 applyTargetHighlight(player.Character)
                                 break
@@ -898,6 +970,10 @@ local function startHuntingLoop()
                         startM1Loop(currentTargetPlayer)
                         startSkillLoop(currentTargetPlayer)
                         
+                        local statsAwal = LocalPlayer:FindFirstChild("leaderstats")
+                        local valBountyAwal = statsAwal and (statsAwal:FindFirstChild("Bounty/Honor") or statsAwal:FindFirstChild("Bounty"))
+                        local bountySebelumKill = valBountyAwal and valBountyAwal.Value or 0
+
                         repeat
                             task.wait(0.1)
                             if manualSkipRequested then break end
@@ -910,10 +986,20 @@ local function startHuntingLoop()
                            or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0)
                         
                         if targetHumanoid and targetHumanoid.Health <= 0 and currentTargetPlayer then
-                            bountyBlacklist[currentTargetPlayer.Name] = os.time() + 120
-                            print("[Bounty Hunter] Target ditumbangkan & masuk blacklist 2 menit: " .. currentTargetPlayer.Name)
+                            bountyBlacklist[currentTargetPlayer.Name] = os.time() + 900
+                            
+                            task.wait(1.0)
+                            
+                            local statsAkhir = LocalPlayer:FindFirstChild("leaderstats") or LocalPlayer:FindFirstChild("Data")
+                            local valBountyAkhir = statsAkhir and (statsAkhir:FindFirstChild("Bounty/Honor") or statsAkhir:FindFirstChild("Bounty") or statsAkhir:FindFirstChild("Honor"))
+                            local bountySesudahKill = valBountyAkhir and valBountyAkhir.Value or bountySebelumKill
+                            
+                            local selisihBountyDapat = bountySesudahKill - bountySebelumKill
+                            
+                            if selisihBountyDapat > 0 then
+                                totalHadiahDiperoleh = totalHadiahDiperoleh + selisihBountyDapat
+                            end
                         end
-
                         stopAllThreads()
                         updateHUDDisplay(nil)
                         if currentTargetPlayer and currentTargetPlayer.Character then
