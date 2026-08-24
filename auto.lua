@@ -102,61 +102,83 @@ if not _G.ServerScannerInitialized then
             print("[HOP DEBUG] __ServerBrowser ditemukan:", serverBrowser:GetFullName(), "| ClassName:", serverBrowser.ClassName)
         end
 
-        local currentPage = 40
-        local maxPages = 300
+        local BATCH_SIZE = 10
+        local MAX_BATCHES = 40 -- 40 batches * 10 pages = up to 400 pages scanned total
         local targetQueueSize = 2
+        local pageCursor = 1 -- sequential page numbering, just fired in parallel chunks
 
-        while task.wait(0.3) do
-            if #_G.PersistentReadyJobIds >= targetQueueSize or currentPage > maxPages then
-                print("[HOP DEBUG] Scanner berhenti. ReadyJobIds:", #_G.PersistentReadyJobIds, "| currentPage:", currentPage)
-                break 
-            end
+        local function processServerList(servers, pageLabel)
+            if type(servers) ~= "table" then return end
 
-            if serverBrowser then
-                local success, servers = pcall(function() return serverBrowser:InvokeServer(currentPage) end)
+            local rawCount = 0
+            for _ in pairs(servers) do rawCount = rawCount + 1 end
+            print("[HOP DEBUG] " .. pageLabel .. " -> dapat " .. rawCount .. " server mentah")
 
-                if not success then
-                    warn("[HOP DEBUG] InvokeServer GAGAL di page " .. currentPage .. ":", servers)
-                elseif type(servers) ~= "table" then
-                    warn("[HOP DEBUG] InvokeServer sukses tapi hasilnya BUKAN table di page " .. currentPage .. ". Type:", type(servers), "Value:", tostring(servers))
-                else
-                    local rawCount = 0
-                    for _ in pairs(servers) do rawCount = rawCount + 1 end
-                    print("[HOP DEBUG] Page " .. currentPage .. " -> dapat " .. rawCount .. " server mentah dari InvokeServer")
-                end
+            for jobId, serverData in pairs(servers) do
+                if #_G.PersistentReadyJobIds >= targetQueueSize then break end
 
-                if success and type(servers) == "table" then
-                    local queueFull = false
+                local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
 
-                    for jobId, serverData in pairs(servers) do
-                        if queueFull then break end
-
-                        local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
-
-                        if count > 0 and count < 12 and jobId ~= game.JobId then
-                            local alreadyInQueue = false
-                            for _, qId in ipairs(_G.PersistentReadyJobIds) do
-                                if qId == jobId then
-                                    alreadyInQueue = true
-                                    break
-                                end
-                            end
-
-                            if not alreadyInQueue and #_G.PersistentReadyJobIds < targetQueueSize then
-                                table.insert(_G.PersistentReadyJobIds, jobId)
-                                print("[HOP DEBUG] Server ditambahkan ke antrian:", jobId, "| player count:", count, "| total sekarang:", #_G.PersistentReadyJobIds)
-
-                                if #_G.PersistentReadyJobIds >= targetQueueSize then
-                                    queueFull = true
-                                end
-                            end
+                if count > 0 and count < 12 and jobId ~= game.JobId then
+                    local alreadyInQueue = false
+                    for _, qId in ipairs(_G.PersistentReadyJobIds) do
+                        if qId == jobId then
+                            alreadyInQueue = true
+                            break
                         end
                     end
+
+                    if not alreadyInQueue and #_G.PersistentReadyJobIds < targetQueueSize then
+                        table.insert(_G.PersistentReadyJobIds, jobId)
+                        print("[HOP DEBUG] Server ditambahkan ke antrian:", jobId, "| player count:", count, "| total sekarang:", #_G.PersistentReadyJobIds)
+                    end
                 end
-                currentPage = currentPage + 1
-                if currentPage > 300 then
-                    currentPage = 1 -- wraparound fallback in case high pages run dry too
-                end
+            end
+        end
+
+        for batchNum = 1, MAX_BATCHES do
+            if #_G.PersistentReadyJobIds >= targetQueueSize then
+                print("[HOP DEBUG] Scanner berhenti, antrian sudah penuh sebelum batch " .. batchNum)
+                break
+            end
+
+            local batchStart = pageCursor
+            local batchEnd = pageCursor + BATCH_SIZE - 1
+            local pagesInFlight = BATCH_SIZE
+            local batchDone = false
+
+            print("[HOP DEBUG] Batch " .. batchNum .. ": scanning page " .. batchStart .. "-" .. batchEnd .. " secara paralel...")
+
+            for page = batchStart, batchEnd do
+                task.spawn(function()
+                    local success, servers = pcall(function() return serverBrowser:InvokeServer(page) end)
+
+                    if success and type(servers) == "table" then
+                        processServerList(servers, "Page " .. page)
+                    elseif not success then
+                        warn("[HOP DEBUG] InvokeServer GAGAL di page " .. page .. ":", servers)
+                    end
+
+                    pagesInFlight = pagesInFlight - 1
+                    if pagesInFlight <= 0 then
+                        batchDone = true
+                    end
+                end)
+            end
+
+            -- wait for this batch to finish, with a safety timeout so one
+            -- slow/stuck request can't hang the whole scanner forever
+            local waited = 0
+            while not batchDone and waited < 4 do
+                task.wait(0.1)
+                waited = waited + 0.1
+            end
+
+            pageCursor = pageCursor + BATCH_SIZE
+
+            if #_G.PersistentReadyJobIds >= targetQueueSize then
+                print("[HOP DEBUG] Scanner berhenti setelah batch " .. batchNum .. ". ReadyJobIds:", #_G.PersistentReadyJobIds)
+                break
             end
         end
     end)
