@@ -904,49 +904,21 @@ local function createNewLayoutUI()
     end)
 
     --==================================================
-    -- SERVER HOP LOGIC (unchanged behavior, new visuals)
+    -- SERVER HOP LOGIC — reads directly from _G.PersistentReadyJobIds,
+    -- which auto.lua's background scanner fills. No separate scanner
+    -- here anymore (that was the bug: two independent scanners existed,
+    -- and only auto.lua's ever actually filled up, so this button never
+    -- saw it and stayed stuck on "MENCARI...").
     --==================================================
-    local readyJobIds = {}
+    _G.PersistentReadyJobIds = _G.PersistentReadyJobIds or {}
     local isHoppingNow = false
 
     task.spawn(function()
-        local serverBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser", 5)
-        local currentPage = 50
-
-        while task.wait(2) do
-            if #readyJobIds < 5 and serverBrowser then
-                local success, servers = pcall(function() return serverBrowser:InvokeServer(currentPage) end)
-
-                if success and type(servers) == "table" then
-                    for jobId, serverData in pairs(servers) do
-                        local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
-
-                        if count > 0 and count < 7 and jobId ~= game.JobId then
-                            local alreadyInQueue = false
-                            for _, qId in ipairs(readyJobIds) do
-                                if qId == jobId then alreadyInQueue = true break end
-                            end
-
-                            if not alreadyInQueue then
-                                table.insert(readyJobIds, jobId)
-                            end
-                        end
-                    end
-                end
-
-                currentPage = currentPage + 1
-                if currentPage > 100 then
-                    currentPage = 50
-                end
-            end
-        end
-    end)
-
-    task.spawn(function()
-        while task.wait(0.5) do
+        while task.wait(0.3) do
             if not isHoppingNow then
-                if #readyJobIds > 0 then
-                    hopLabel.Text = "HOP (" .. #readyJobIds .. " SIAP)"
+                local count = #_G.PersistentReadyJobIds
+                if count > 0 then
+                    hopLabel.Text = "HOP (" .. count .. " SIAP)"
                     tween(hopDot, 0.15, { BackgroundColor3 = GREEN })
                 else
                     hopLabel.Text = "MENCARI..."
@@ -958,9 +930,9 @@ local function createNewLayoutUI()
 
     hopBtn.MouseButton1Click:Connect(function()
         if isHoppingNow then return end
-        if #readyJobIds > 0 then
+        if #_G.PersistentReadyJobIds > 0 then
             isHoppingNow = true
-            local targetJobId = table.remove(readyJobIds, 1)
+            local targetJobId = table.remove(_G.PersistentReadyJobIds, 1)
             hopLabel.Text = "JOINING..."
             tween(hopDot, 0.15, { BackgroundColor3 = GREEN })
 
