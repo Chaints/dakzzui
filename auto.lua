@@ -94,17 +94,36 @@ if not _G.ServerScannerInitialized then
     _G.ServerScannerInitialized = true
     task.spawn(function()
         local serverBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser", 5)
+
+        if not serverBrowser then
+            warn("[HOP DEBUG] __ServerBrowser TIDAK DITEMUKAN di ReplicatedStorage setelah nunggu 5 detik. Remote ini kemungkinan tidak exist / salah nama.")
+            return
+        else
+            print("[HOP DEBUG] __ServerBrowser ditemukan:", serverBrowser:GetFullName(), "| ClassName:", serverBrowser.ClassName)
+        end
+
         local currentPage = 1
         local maxPages = 200
         
         while task.wait(0.3) do
             if #_G.PersistentReadyJobIds >= 2 or currentPage > maxPages then
+                print("[HOP DEBUG] Scanner berhenti. ReadyJobIds:", #_G.PersistentReadyJobIds, "| currentPage:", currentPage)
                 break 
             end
 
             if serverBrowser then
                 local success, servers = pcall(function() return serverBrowser:InvokeServer(currentPage) end)
-                
+
+                if not success then
+                    warn("[HOP DEBUG] InvokeServer GAGAL di page " .. currentPage .. ":", servers)
+                elseif type(servers) ~= "table" then
+                    warn("[HOP DEBUG] InvokeServer sukses tapi hasilnya BUKAN table di page " .. currentPage .. ". Type:", type(servers), "Value:", tostring(servers))
+                else
+                    local rawCount = 0
+                    for _ in pairs(servers) do rawCount = rawCount + 1 end
+                    print("[HOP DEBUG] Page " .. currentPage .. " -> dapat " .. rawCount .. " server mentah dari InvokeServer")
+                end
+
                 if success and type(servers) == "table" then
                     for jobId, serverData in pairs(servers) do
                         local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
@@ -117,6 +136,7 @@ if not _G.ServerScannerInitialized then
                             
                             if not alreadyInQueue then
                                 table.insert(_G.PersistentReadyJobIds, jobId)
+                                print("[HOP DEBUG] Server ditambahkan ke antrian:", jobId, "| player count:", count)
                                 if #_G.PersistentReadyJobIds >= 2 then break end
                             end
                         end
