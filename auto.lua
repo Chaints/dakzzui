@@ -104,9 +104,10 @@ if not _G.ServerScannerInitialized then
 
         local currentPage = 1
         local maxPages = 200
-        
+        local targetQueueSize = 2
+
         while task.wait(0.3) do
-            if #_G.PersistentReadyJobIds >= 2 or currentPage > maxPages then
+            if #_G.PersistentReadyJobIds >= targetQueueSize or currentPage > maxPages then
                 print("[HOP DEBUG] Scanner berhenti. ReadyJobIds:", #_G.PersistentReadyJobIds, "| currentPage:", currentPage)
                 break 
             end
@@ -125,19 +126,29 @@ if not _G.ServerScannerInitialized then
                 end
 
                 if success and type(servers) == "table" then
+                    local queueFull = false
+
                     for jobId, serverData in pairs(servers) do
+                        if queueFull then break end
+
                         local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
-                        
+
                         if count > 0 and count < 9 and jobId ~= game.JobId then
                             local alreadyInQueue = false
                             for _, qId in ipairs(_G.PersistentReadyJobIds) do
-                                if qId == jobId then alreadyInQueue = true break end
+                                if qId == jobId then
+                                    alreadyInQueue = true
+                                    break
+                                end
                             end
-                            
-                            if not alreadyInQueue then
+
+                            if not alreadyInQueue and #_G.PersistentReadyJobIds < targetQueueSize then
                                 table.insert(_G.PersistentReadyJobIds, jobId)
-                                print("[HOP DEBUG] Server ditambahkan ke antrian:", jobId, "| player count:", count)
-                                if #_G.PersistentReadyJobIds >= 2 then break end
+                                print("[HOP DEBUG] Server ditambahkan ke antrian:", jobId, "| player count:", count, "| total sekarang:", #_G.PersistentReadyJobIds)
+
+                                if #_G.PersistentReadyJobIds >= targetQueueSize then
+                                    queueFull = true
+                                end
                             end
                         end
                     end
