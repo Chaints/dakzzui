@@ -932,19 +932,49 @@ local function createNewLayoutUI()
         if isHoppingNow then return end
         if #_G.PersistentReadyJobIds > 0 then
             isHoppingNow = true
-            local targetJobId = table.remove(_G.PersistentReadyJobIds, 1)
-            hopLabel.Text = "JOINING..."
-            tween(hopDot, 0.15, { BackgroundColor3 = GREEN })
 
-            pcall(function()
-                local serverBrowser = ReplicatedStorage:FindFirstChild("__ServerBrowser")
-                if serverBrowser then
-                    serverBrowser:InvokeServer("teleport", targetJobId)
+            local function attemptHop()
+                local targetJobId = table.remove(_G.PersistentReadyJobIds, 1)
+                if not targetJobId then
+                    -- ran out of candidates in the queue
+                    hopLabel.Text = "GAGAL, ULANGI"
+                    tween(hopDot, 0.15, { BackgroundColor3 = RED })
+                    task.wait(1.2)
+                    isHoppingNow = false
+                    return
                 end
-            end)
 
-            task.wait(5)
-            isHoppingNow = false
+                hopLabel.Text = "JOINING..."
+                tween(hopDot, 0.15, { BackgroundColor3 = GREEN })
+
+                local ok = pcall(function()
+                    local serverBrowser = ReplicatedStorage:FindFirstChild("__ServerBrowser")
+                    if serverBrowser then
+                        serverBrowser:InvokeServer("teleport", targetJobId)
+                    end
+                end)
+
+                -- If we're still here after ~2s, the teleport likely failed silently
+                -- (server full / rejected) rather than actually switching servers.
+                -- Try the next candidate in the queue instead of just giving up.
+                task.wait(2)
+
+                if not ok then
+                    if #_G.PersistentReadyJobIds > 0 then
+                        hopLabel.Text = "SERVER PENUH, COBA LAGI..."
+                        attemptHop()
+                        return
+                    else
+                        hopLabel.Text = "GAGAL, ULANGI"
+                        tween(hopDot, 0.15, { BackgroundColor3 = RED })
+                        task.wait(1.2)
+                    end
+                end
+
+                isHoppingNow = false
+            end
+
+            attemptHop()
         end
     end)
 

@@ -133,7 +133,7 @@ if not _G.ServerScannerInitialized then
 
                         local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
 
-                        if count > 0 and count < 9 and jobId ~= game.JobId then
+                        if count > 0 and count < 12 and jobId ~= game.JobId then
                             local alreadyInQueue = false
                             for _, qId in ipairs(_G.PersistentReadyJobIds) do
                                 if qId == jobId then
