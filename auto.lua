@@ -102,8 +102,8 @@ if not _G.ServerScannerInitialized then
             print("[HOP DEBUG] __ServerBrowser ditemukan:", serverBrowser:GetFullName(), "| ClassName:", serverBrowser.ClassName)
         end
 
-        local currentPage = 1
-        local maxPages = 200
+        local currentPage = 85
+        local maxPages = 300
         local targetQueueSize = 2
 
         while task.wait(0.3) do
@@ -154,6 +154,9 @@ if not _G.ServerScannerInitialized then
                     end
                 end
                 currentPage = currentPage + 1
+                if currentPage > 300 then
+                    currentPage = 1 -- wraparound fallback in case high pages run dry too
+                end
             end
         end
     end)
