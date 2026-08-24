@@ -1002,6 +1002,33 @@ local function createNewLayoutUI()
         end
     end)
 
+    --==================================================
+    -- LIVE DISTANCE UPDATE (JARAK field refreshes continuously while
+    -- a target is active, instead of only once when the target was
+    -- first found — distance changes as both players move, so this
+    -- needs its own fast loop separate from updateHUDDisplay).
+    --==================================================
+    task.spawn(function()
+        while gui.Parent do
+            task.wait(0.2)
+
+            if infoValues["JARAK"] and state.currentTargetPlayer and state.currentTargetPlayer.Parent then
+                pcall(function()
+                    local LocalPlayer = game:GetService("Players").LocalPlayer
+                    local myChar = LocalPlayer.Character
+                    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    local targetChar = state.currentTargetPlayer.Character
+                    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+
+                    if myRoot and targetRoot then
+                        local d = (myRoot.Position - targetRoot.Position).Magnitude
+                        infoValues["JARAK"].Text = tostring(math.floor(d)) .. " studs"
+                    end
+                end)
+            end
+        end
+    end)
+
     -- Expose refs for updateHUDDisplay to use
     UIRefs.infoValues = infoValues
 end
