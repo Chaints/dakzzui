@@ -116,8 +116,8 @@ local function createUI()
     local navbarHolder = Instance.new("Frame")
     navbarHolder.Name = "NavbarHolder"
     navbarHolder.AnchorPoint = Vector2.new(0.5, 0)
-    navbarHolder.Position = UDim2.new(0.5, 0, 0, 20) -- moved closer to the top icon row (menu/chat) so it sits beside them
-    navbarHolder.Size = UDim2.new(0.52, 0, 0.09, 0)
+    navbarHolder.Position = UDim2.new(0.5, 0, 0, 15)
+    navbarHolder.Size = UDim2.new(0.62, 0, 0.11, 0)
     navbarHolder.BackgroundTransparency = 1
     navbarHolder.Parent = gui
 
@@ -129,8 +129,8 @@ local function createUI()
     local root = Instance.new("Frame")
     root.Name = "Root"
     root.AnchorPoint = Vector2.new(0.5, 0.5)
-    root.Position = UDim2.new(0.5, 0, 0.56, 0)
-    root.Size = UDim2.new(0.52, 0, 0.5, 0)
+    root.Position = UDim2.new(0.5, 0, 0.58, 0)
+    root.Size = UDim2.new(0.62, 0, 0.56, 0)
     root.BackgroundTransparency = 1
     root.Parent = gui
 
