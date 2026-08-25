@@ -120,7 +120,7 @@ local function createUI()
     -- instead of being oversized on phones. Height is clamped so it
     -- never exceeds roughly 40% of the screen — everything fits in
     -- one glance without scrolling.
-    root.Size = UDim2.new(0.94, 0, 0.4, 0)
+    root.Size = UDim2.new(0.6, 0, 0.58, 0)
     root.BackgroundTransparency = 1
     root.Parent = gui
 
@@ -132,7 +132,7 @@ local function createUI()
     --==================================================
     local navbar = Instance.new("Frame")
     navbar.Name = "Navbar"
-    navbar.Size = UDim2.new(1, 0, 0.22, 0) -- slim strip, ~22% of root height
+    navbar.Size = UDim2.new(1, 0, 0.16, 0) -- slightly shorter proportionally since root itself is now taller overall
     navbar.Position = UDim2.new(0, 0, 0, 0)
     navbar.BackgroundColor3 = BG_CARD
     navbar.BorderSizePixel = 0
@@ -163,12 +163,12 @@ local function createUI()
         b.Name = name .. "Tab"
         b.AnchorPoint = Vector2.new(0, 0.5)
         b.Position = UDim2.new(posScale, posOffset, 0.5, 0)
-        b.Size = UDim2.new(sizeScale, sizeOffset, 0.7, 0)
+        b.Size = UDim2.new(sizeScale, sizeOffset, 0.8, 0)
         b.BackgroundColor3 = SAND
         b.AutoButtonColor = false
         b.Text = name
         b.TextColor3 = SAND_TEXT
-        b.TextSize = 7
+        b.TextSize = 10
         b.TextScaled = true
         b.Font = Enum.Font.GothamBold
         b.ZIndex = 12
@@ -196,8 +196,8 @@ local function createUI()
     --==================================================
     local contentLayer = Instance.new("Frame")
     contentLayer.Name = "ContentLayer"
-    contentLayer.Position = UDim2.new(0, 0, 0.22, 6) -- right after the navbar's 0.22 scale height + small gap
-    contentLayer.Size = UDim2.new(1, 0, 0.78, -6)
+    contentLayer.Position = UDim2.new(0, 0, 0.16, 6) -- right after the navbar's 0.16 scale height + small gap
+    contentLayer.Size = UDim2.new(1, 0, 0.84, -6)
     contentLayer.BackgroundTransparency = 1
     contentLayer.Parent = root
 
@@ -269,7 +269,7 @@ local function createUI()
     statusPill.BackgroundTransparency = 1
     statusPill.Parent = statusCard
 
-    label(statusPill, "MASTER AUTO BOUNTY", UDim2.new(0, 0, 0, 0), UDim2.new(0.6, 0, 1, 0), 10, TEXT, Enum.Font.GothamBold)
+    label(statusPill, "MASTER AUTO BOUNTY", UDim2.new(0, 0, 0, 0), UDim2.new(0.6, 0, 1, 0), 14, TEXT, Enum.Font.GothamBold)
 
     local onPill = Instance.new("Frame")
     onPill.AnchorPoint = Vector2.new(1, 0.5)
@@ -279,14 +279,14 @@ local function createUI()
     onPill.Parent = statusPill
     corner(onPill, 10)
 
-    local onLabel = label(onPill, "ON", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), 9, GREEN_DARK, Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+    local onLabel = label(onPill, "ON", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), 13, GREEN_DARK, Enum.Font.GothamBold, Enum.TextXAlignment.Center)
     UIRefs.masterStatusPill = onPill
     UIRefs.masterStatusLabel = onLabel
 
-    local statusLine1 = label(statusCard, "Status: Active Hunting", UDim2.new(0, 8, 0.34, 0), UDim2.new(1, -16, 0.15, 0), 8, TEXT)
-    local statusLine2 = label(statusCard, "Current Region: Port Town", UDim2.new(0, 8, 0.49, 0), UDim2.new(1, -16, 0.15, 0), 8, TEXT)
-    local statusLine3 = label(statusCard, "Region: Sandy Island - 90%", UDim2.new(0, 8, 0.64, 0), UDim2.new(1, -16, 0.15, 0), 8, MUTED)
-    local statusLine4 = label(statusCard, "Bounty Filter: 500K - 100M", UDim2.new(0, 8, 0.79, 0), UDim2.new(1, -16, 0.15, 0), 8, MUTED)
+    local statusLine1 = label(statusCard, "Status: Active Hunting", UDim2.new(0, 8, 0.34, 0), UDim2.new(1, -16, 0.15, 0), 12, TEXT)
+    local statusLine2 = label(statusCard, "Current Region: Port Town", UDim2.new(0, 8, 0.49, 0), UDim2.new(1, -16, 0.15, 0), 12, TEXT)
+    local statusLine3 = label(statusCard, "Region: Sandy Island - 90%", UDim2.new(0, 8, 0.64, 0), UDim2.new(1, -16, 0.15, 0), 12, MUTED)
+    local statusLine4 = label(statusCard, "Bounty Filter: 500K - 100M", UDim2.new(0, 8, 0.79, 0), UDim2.new(1, -16, 0.15, 0), 12, MUTED)
 
     UIRefs.statusLines = { statusLine1, statusLine2, statusLine3, statusLine4 }
 
@@ -310,9 +310,9 @@ local function createUI()
     corner(avatarImage, 8)
     UIRefs.avatarImage = avatarImage
 
-    local targetName = label(targetCard, "Player_SwiftSword", UDim2.new(0.3, 0, 0.06, 0), UDim2.new(0.68, 0, 0.15, 0), 9, TEXT, Enum.Font.GothamBold)
-    local targetBounty = label(targetCard, "Bounty: 4.8M+", UDim2.new(0.3, 0, 0.22, 0), UDim2.new(0.68, 0, 0.13, 0), 8, MUTED)
-    local targetRank = label(targetCard, "Rank: Grandmaster", UDim2.new(0.3, 0, 0.36, 0), UDim2.new(0.68, 0, 0.13, 0), 8, MUTED)
+    local targetName = label(targetCard, "Player_SwiftSword", UDim2.new(0.3, 0, 0.06, 0), UDim2.new(0.68, 0, 0.15, 0), 13, TEXT, Enum.Font.GothamBold)
+    local targetBounty = label(targetCard, "Bounty: 4.8M+", UDim2.new(0.3, 0, 0.22, 0), UDim2.new(0.68, 0, 0.13, 0), 12, MUTED)
+    local targetRank = label(targetCard, "Rank: Grandmaster", UDim2.new(0.3, 0, 0.36, 0), UDim2.new(0.68, 0, 0.13, 0), 12, MUTED)
 
     local hpBarBg = Instance.new("Frame")
     hpBarBg.Size = UDim2.new(0.68, 0, 0.14, 0)
@@ -327,15 +327,15 @@ local function createUI()
     hpBarFill.Parent = hpBarBg
     corner(hpBarFill, 8)
 
-    local hpLabel = label(hpBarFill, "HP: 95%", UDim2.new(0, 6, 0, 0), UDim2.new(1, -6, 1, 0), 7, GREEN_DARK, Enum.Font.GothamBold)
+    local hpLabel = label(hpBarFill, "HP: 95%", UDim2.new(0, 6, 0, 0), UDim2.new(1, -6, 1, 0), 11, GREEN_DARK, Enum.Font.GothamBold)
     UIRefs.hpBarFill = hpBarFill
     UIRefs.hpLabel = hpLabel
     UIRefs.targetName = targetName
     UIRefs.targetBounty = targetBounty
     UIRefs.targetRank = targetRank
 
-    local killsLine = label(targetCard, "Total Kills: 875", UDim2.new(0, 8, 0.7, 0), UDim2.new(1, -16, 0.13, 0), 8, TEXT)
-    local earnedLine = label(targetCard, "Earned Today: +150K", UDim2.new(0, 8, 0.85, 0), UDim2.new(1, -16, 0.13, 0), 8, TEXT)
+    local killsLine = label(targetCard, "Total Kills: 875", UDim2.new(0, 8, 0.7, 0), UDim2.new(1, -16, 0.13, 0), 12, TEXT)
+    local earnedLine = label(targetCard, "Earned Today: +150K", UDim2.new(0, 8, 0.85, 0), UDim2.new(1, -16, 0.13, 0), 12, TEXT)
     UIRefs.killsLine = killsLine
     UIRefs.earnedLine = earnedLine
 
@@ -369,12 +369,12 @@ local function createUI()
     local function addLogLine(text)
         logOrderCounter = logOrderCounter + 1
         local row = Instance.new("TextLabel")
-        row.Size = UDim2.new(1, 0, 0, 12)
+        row.Size = UDim2.new(1, 0, 0, 16)
         row.LayoutOrder = logOrderCounter
         row.BackgroundTransparency = 1
         row.Text = text
         row.TextColor3 = TEXT
-        row.TextSize = 8
+        row.TextSize = 11
         row.Font = Enum.Font.Gotham
         row.TextXAlignment = Enum.TextXAlignment.Left
         row.Parent = logScroll
