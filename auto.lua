@@ -1017,9 +1017,13 @@ end
 -- startHuntingLoop / stopAllThreads / manualSkipList, which only exist
 -- as usable values from this point onward.
 pcall(function()
-    UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/ui.lua", true))()
-    if UI and UI.Init then
-        UI.Init(SafeUIParent, state)
+    local UIModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/ui.lua", true))()
+    if UIModule and UIModule.Init then
+        -- Init() returns { createNewLayoutUI, updateHUDDisplay, addTargetLogEntry, UIRefs }
+        -- We must capture THIS return value into `UI`, not UIModule itself,
+        -- otherwise UI.updateHUDDisplay below is always nil and the HUD
+        -- (NAMA/LEVEL/STATUS/BOUNTY) never updates.
+        UI = UIModule.Init(SafeUIParent, state)
     end
 end)
 
