@@ -1424,6 +1424,33 @@ local function createNewLayoutUI()
     -- Expose refs for updateHUDDisplay / auto.lua to use
     UIRefs.infoValues = infoValues
     UIRefs.addTargetLogEntry = addTargetLogEntry
+
+    -- DEBUG: dump every element under root so we can see exact names,
+    -- sizes, and visibility in the console instead of guessing from
+    -- screenshots. Remove this block once the mystery box is found.
+    task.defer(function()
+        print("========== UI DEBUG DUMP ==========")
+        local function dump(obj, depth)
+            local prefix = string.rep("  ", depth)
+            local sizeInfo = ""
+            pcall(function()
+                sizeInfo = string.format(
+                    " | Size=%s | AbsSize=%s | Visible=%s | BG=%s | Transp=%s",
+                    tostring(obj.Size),
+                    tostring(obj.AbsoluteSize),
+                    tostring(obj.Visible == nil and "N/A" or obj.Visible),
+                    obj:IsA("GuiObject") and tostring(obj.BackgroundColor3) or "N/A",
+                    obj:IsA("GuiObject") and tostring(obj.BackgroundTransparency) or "N/A"
+                )
+            end)
+            print(prefix .. obj.ClassName .. " '" .. obj.Name .. "'" .. sizeInfo)
+            for _, child in ipairs(obj:GetChildren()) do
+                dump(child, depth + 1)
+            end
+        end
+        dump(root, 0)
+        print("========== END DEBUG DUMP ==========")
+    end)
 end
 
 --==================================================
