@@ -266,6 +266,7 @@ local function createNewLayoutUI()
     tabGrid.CellSize = UDim2.new(0.25, -5, 1, 0) -- 4 equal columns, shrinks with tabBar
     tabGrid.SortOrder = Enum.SortOrder.LayoutOrder
     tabGrid.Parent = tabBar
+    uistroke(tabBar, Color3.fromRGB(255, 0, 0), 3, 0) -- DEBUG: red outline to see tabBar's real bounds
 
     local tabButtons = {}
     local tabContainers = {}
@@ -621,7 +622,7 @@ local function createNewLayoutUI()
     logFrame.Parent = targetsTab
     corner(logFrame, 20)
 
-    uistroke(logFrame, STROKE, 1, 0.5)
+    uistroke(logFrame, Color3.fromRGB(0, 255, 0), 4, 0)
 
     local logTitle = Instance.new("TextLabel")
     logTitle.Size = UDim2.new(1, -20, 0, 16)
@@ -696,7 +697,7 @@ local function createNewLayoutUI()
     combatCard.Parent = combatTab
     corner(combatCard, 20)
 
-    uistroke(combatCard, STROKE, 1, 0.5)
+    uistroke(combatCard, Color3.fromRGB(0, 150, 255), 4, 0)
 
     local combatTitle = Instance.new("TextLabel")
     combatTitle.Size = UDim2.new(1, -20, 0, 16)
@@ -857,7 +858,7 @@ local function createNewLayoutUI()
     hopBtn.Parent = hopTab
     corner(hopBtn, 20)
 
-    uistroke(hopBtn, STROKE, 1, 0.5)
+    uistroke(hopBtn, Color3.fromRGB(255, 255, 0), 4, 0)
 
     local hopDot = Instance.new("Frame")
     hopDot.Size = UDim2.fromOffset(10, 10)
