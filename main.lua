@@ -1,31 +1,43 @@
-local BASE_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/"
+-- Tunggu sampai game benar-benar 100% termuat
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+task.wait(3)
 
-local function loadRemote(path)
-    -- cache-busting: raw.githubusercontent.com di-cache oleh CDN GitHub
-    -- selama beberapa menit per URL. Nambahin query string random bikin
-    -- tiap request keliatan sebagai URL baru buat CDN-nya, jadi selalu
-    -- ambil versi terbaru dari repo, bukan versi lama yang ke-cache.
-    local url = BASE_URL .. path .. "?v=" .. tostring(math.random(1, 1000000000)) .. tostring(tick())
-    local ok, result = pcall(function()
-        return loadstring(game:HttpGet(url, true))()
+local placeId = game.PlaceId
+print("[Loader] Mengecek lokasi... Place ID yang terbaca saat ini: " .. tostring(placeId))
+
+-- Tabel Kumpulan Place ID (Bisa kalian tambah sendiri kalau nanti nemu ID baru)
+local Sea2_IDs = {4442272000, 4442272183, 79091703265657}
+local Sea3_IDs = {7449423635, 100117331123089}
+local Sea1_IDs = {2753915549}
+
+if table.find(Sea2_IDs, placeId) then
+    print("[Loader] Terdeteksi di SEA 2 (Public/PS)! Memuat script Sea 2...")
+    local success, err = pcall(function()
+        loadstring(game:HttpGet("isi raw girhub dakkzzzz sea 2 harus udh obscate"))()
     end)
-
-    if not ok then
-        warn("[Loader] Gagal load " .. path .. ": " .. tostring(result))
-        return nil
+    if not success then
+        warn("[Loader Error] Gagal memuat script Sea 2! Detail: " .. tostring(err))
     end
 
-    return result
+elseif table.find(Sea3_IDs, placeId) then
+    print("[Loader] Terdeteksi di SEA 3 (Public/PS)! Memuat script Sea 3...")
+    local success, err = pcall(function()
+        loadstring(game:HttpGet("isi raw gihub sea 3 obscte"))()
+    end)
+    if not success then
+        warn("[Loader Error] Gagal memuat script Sea 3! Detail: " .. tostring(err))
+    end
+
+elseif table.find(Sea1_IDs, placeId) then
+    warn("[Loader] Kamu berada di Sea 1. Silakan pindah ke Sea 2 atau Sea 3 dulu!")
+
+else
+    -- Kalau masuk ke sini, berarti ID gamenya anomali lagi
+    warn("==============================================")
+    warn("🚨 GAME TIDAK DIKENALI SEBAGAI BLOX FRUITS 🚨")
+    warn("PLACE ID YANG TERBACA: " .. tostring(placeId))
+    warn("==============================================")
+    warn("Masukkan angka di atas ke dalam tabel 'Sea2_IDs' atau 'Sea3_IDs' di baris atas script!")
 end
-
--- ==========================================
--- 1. Jalankan animasi loading dulu (blocking sampai selesai,
---    karena loading.lua sendiri pakai task.wait di akhir baris-baris eksekusinya)
--- ==========================================
-loadRemote("loading.lua")
-
--- ==========================================
--- 2. Baru jalankan logic utama (auto.lua), yang di dalamnya
---    otomatis meng-load ui.lua juga
--- ==========================================
-loadRemote("auto.lua")
