@@ -386,7 +386,7 @@ local function createNewLayoutUI()
     uistroke(info, STROKE, 1, 0.5)
 
     local infoTitle = Instance.new("TextLabel")
-    infoTitle.Size = UDim2.new(1, -20, 0, 18)
+    infoTitle.Size = UDim2.new(1, -78, 0, 18)
     infoTitle.Position = UDim2.fromOffset(14, 10)
     infoTitle.BackgroundTransparency = 1
     infoTitle.Text = "TARGET INFO"
@@ -395,6 +395,61 @@ local function createNewLayoutUI()
     infoTitle.Font = Enum.Font.GothamBold
     infoTitle.TextXAlignment = Enum.TextXAlignment.Left
     infoTitle.Parent = info
+
+    --==================================================
+    -- START TOGGLE — small switch pinned to the top-right corner of the
+    -- TARGET INFO card. Same shortcut as the tab bar status pill: flips
+    -- _G.AutoHuntEnabled and calls state.OnToggleHunt if auto.lua wired
+    -- one in. Visual state (green/off-grey) is kept in sync by the
+    -- status poll loop further below so it never drifts out of sync
+    -- with whatever actually started/stopped the hunt.
+    --==================================================
+    local startToggleBG = Instance.new("Frame")
+    startToggleBG.Name = "StartToggle"
+    startToggleBG.Size = UDim2.fromOffset(40, 20)
+    startToggleBG.AnchorPoint = Vector2.new(1, 0)
+    startToggleBG.Position = UDim2.new(1, -14, 0, 9)
+    startToggleBG.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    startToggleBG.BorderSizePixel = 0
+    startToggleBG.Parent = info
+    corner(startToggleBG, 99)
+    uistroke(startToggleBG, STROKE, 1, 0.4)
+
+    local startToggleKnob = Instance.new("Frame")
+    startToggleKnob.Size = UDim2.fromOffset(16, 16)
+    startToggleKnob.AnchorPoint = Vector2.new(0, 0.5)
+    startToggleKnob.Position = UDim2.new(0, 2, 0.5, 0)
+    startToggleKnob.BackgroundColor3 = Color3.new(1, 1, 1)
+    startToggleKnob.BorderSizePixel = 0
+    startToggleKnob.Parent = startToggleBG
+    corner(startToggleKnob, 99)
+
+    local startToggleBtn = Instance.new("TextButton")
+    startToggleBtn.Size = UDim2.new(1, 0, 1, 0)
+    startToggleBtn.BackgroundTransparency = 1
+    startToggleBtn.Text = ""
+    startToggleBtn.Parent = startToggleBG
+
+    local function setStartToggleVisual(on)
+        if on then
+            tween(startToggleBG, 0.14, { BackgroundColor3 = GREEN })
+            tween(startToggleKnob, 0.14, { Position = UDim2.new(1, -18, 0.5, 0) })
+        else
+            tween(startToggleBG, 0.14, { BackgroundColor3 = Color3.fromRGB(70, 70, 70) })
+            tween(startToggleKnob, 0.14, { Position = UDim2.new(0, 2, 0.5, 0) })
+        end
+    end
+
+    setStartToggleVisual(_G.AutoHuntEnabled or false)
+
+    startToggleBtn.MouseButton1Click:Connect(function()
+        local newState = not _G.AutoHuntEnabled
+        _G.AutoHuntEnabled = newState
+        setStartToggleVisual(newState)
+        if state.OnToggleHunt then
+            state.OnToggleHunt(newState)
+        end
+    end)
 
     --==================================================
     -- SKIP TARGET (moved here from Combat tab; sits right under the
@@ -745,6 +800,143 @@ local function createNewLayoutUI()
             end
         end
     end)
+
+    --==================================================
+    -- SELECT SKILL — per-category, per-key toggles that read/write
+    -- directly to _G.CombatConfig[category][key].On (auto.lua's
+    -- startSkillLoop checks this table before firing each key). Each
+    -- key is its own independent toggle (multi-select within a
+    -- category), wrapped in a ScrollingFrame so adding categories never
+    -- grows the card itself — only the divider below the speed slider.
+    --==================================================
+    local skillDivider = Instance.new("Frame")
+    skillDivider.Size = UDim2.new(1, -28, 0, 1)
+    skillDivider.Position = UDim2.fromOffset(14, 74)
+    skillDivider.BackgroundColor3 = STROKE
+    skillDivider.BackgroundTransparency = 0.4
+    skillDivider.BorderSizePixel = 0
+    skillDivider.Parent = combatCard
+
+    local skillSectionTitle = Instance.new("TextLabel")
+    skillSectionTitle.Size = UDim2.new(1, -28, 0, 14)
+    skillSectionTitle.Position = UDim2.fromOffset(14, 82)
+    skillSectionTitle.BackgroundTransparency = 1
+    skillSectionTitle.Text = "SELECT SKILL"
+    skillSectionTitle.TextColor3 = MUTED
+    skillSectionTitle.TextSize = 8
+    skillSectionTitle.Font = Enum.Font.GothamBold
+    skillSectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    skillSectionTitle.Parent = combatCard
+
+    local skillScroll = Instance.new("ScrollingFrame")
+    skillScroll.Size = UDim2.new(1, -28, 1, -102)
+    skillScroll.Position = UDim2.fromOffset(14, 100)
+    skillScroll.BackgroundTransparency = 1
+    skillScroll.BorderSizePixel = 0
+    skillScroll.ScrollBarThickness = 3
+    skillScroll.ScrollBarImageColor3 = ACCENT
+    skillScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    skillScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    skillScroll.Parent = combatCard
+
+    local skillListLayout = Instance.new("UIListLayout")
+    skillListLayout.Padding = UDim.new(0, 8)
+    skillListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    skillListLayout.Parent = skillScroll
+
+    -- Relevant keys per category, per your game's actual skill layout
+    local SKILL_CATEGORIES = {
+        { name = "Melee", keys = { "Z", "X", "C" } },
+        { name = "Sword", keys = { "Z", "X" } },
+        { name = "Gun",   keys = { "Z", "X" } },
+        { name = "Fruit", keys = { "Z", "X", "C", "V", "F" } },
+    }
+
+    _G.CombatConfig = _G.CombatConfig or {}
+
+    local function ensureCombatConfigEntry(category, key)
+        _G.CombatConfig[category] = _G.CombatConfig[category] or {}
+        _G.CombatConfig[category][key] = _G.CombatConfig[category][key] or { On = true }
+        return _G.CombatConfig[category][key]
+    end
+
+    -- Small pill toggle for a single key within a category row. Visually
+    -- identical language to the START toggle (grey off / green on) so the
+    -- whole UI reads consistently.
+    local function createKeyToggle(parent, category, key, layoutOrder)
+        local cfg = ensureCombatConfigEntry(category, key)
+
+        local chip = Instance.new("Frame")
+        chip.Size = UDim2.fromOffset(50, 26)
+        chip.LayoutOrder = layoutOrder
+        chip.BackgroundColor3 = cfg.On and GREEN or CARD2
+        chip.BorderSizePixel = 0
+        chip.Parent = parent
+        corner(chip, 10)
+        uistroke(chip, STROKE, 1, 0.5)
+
+        local chipLabel = Instance.new("TextLabel")
+        chipLabel.Size = UDim2.new(1, 0, 1, 0)
+        chipLabel.BackgroundTransparency = 1
+        chipLabel.Text = key
+        chipLabel.TextColor3 = cfg.On and ACCENT_TEXT or TEXT
+        chipLabel.TextSize = 11
+        chipLabel.Font = Enum.Font.GothamBold
+        chipLabel.Parent = chip
+
+        local chipBtn = Instance.new("TextButton")
+        chipBtn.Size = UDim2.new(1, 0, 1, 0)
+        chipBtn.BackgroundTransparency = 1
+        chipBtn.Text = ""
+        chipBtn.Parent = chip
+
+        chipBtn.MouseButton1Click:Connect(function()
+            cfg.On = not cfg.On
+            if cfg.On then
+                tween(chip, 0.12, { BackgroundColor3 = GREEN })
+                chipLabel.TextColor3 = ACCENT_TEXT
+            else
+                tween(chip, 0.12, { BackgroundColor3 = CARD2 })
+                chipLabel.TextColor3 = TEXT
+            end
+        end)
+
+        return chip
+    end
+
+    for catOrder, catData in ipairs(SKILL_CATEGORIES) do
+        local catRow = Instance.new("Frame")
+        catRow.Size = UDim2.new(1, 0, 0, 44)
+        catRow.LayoutOrder = catOrder
+        catRow.BackgroundTransparency = 1
+        catRow.Parent = skillScroll
+
+        local catLabel = Instance.new("TextLabel")
+        catLabel.Size = UDim2.new(1, 0, 0, 14)
+        catLabel.BackgroundTransparency = 1
+        catLabel.Text = catData.name:upper()
+        catLabel.TextColor3 = MUTED
+        catLabel.TextSize = 9
+        catLabel.Font = Enum.Font.GothamMedium
+        catLabel.TextXAlignment = Enum.TextXAlignment.Left
+        catLabel.Parent = catRow
+
+        local chipHolder = Instance.new("Frame")
+        chipHolder.Size = UDim2.new(1, 0, 0, 26)
+        chipHolder.Position = UDim2.fromOffset(0, 18)
+        chipHolder.BackgroundTransparency = 1
+        chipHolder.Parent = catRow
+
+        local chipLayout = Instance.new("UIListLayout")
+        chipLayout.FillDirection = Enum.FillDirection.Horizontal
+        chipLayout.Padding = UDim.new(0, 8)
+        chipLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        chipLayout.Parent = chipHolder
+
+        for keyOrder, key in ipairs(catData.keys) do
+            createKeyToggle(chipHolder, catData.name, key, keyOrder)
+        end
+    end
 
     --==================================================
     -- TAB: HOP — server hop button (bigger/clearer since it now
@@ -1191,6 +1383,7 @@ local function createNewLayoutUI()
     -- STATUS INDICATOR LOOP (read-only reflection of isHunting)
     --==================================================
     local statusPulseConn
+    local lastKnownHuntFlag = _G.AutoHuntEnabled or false
     task.spawn(function()
         local t = 0
         while gui.Parent do
@@ -1204,6 +1397,15 @@ local function createNewLayoutUI()
                 end
             else
                 tabBarStatusDot.BackgroundColor3 = MUTED
+            end
+
+            -- keep the dashboard START toggle visually in sync in case
+            -- the hunt was started/stopped from elsewhere (e.g. auto-off
+            -- on low HP), not just via this switch
+            local huntFlag = _G.AutoHuntEnabled or false
+            if huntFlag ~= lastKnownHuntFlag then
+                lastKnownHuntFlag = huntFlag
+                setStartToggleVisual(huntFlag)
             end
 
             if infoValues["TOTAL"] then
