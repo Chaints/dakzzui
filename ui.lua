@@ -222,33 +222,31 @@ local function createNewLayoutUI()
     navPadding.PaddingBottom = UDim.new(0, 10)
     navPadding.Parent = navbar
 
-    -- Vertical stack: row 1 (title + header buttons), row 2 (tab pills).
-    -- Two rows instead of cramming everything horizontally means the
-    -- navbar still fits on narrow phone screens without squeezing tabs
-    -- out or forcing weird wraps.
-    local navLayout = Instance.new("UIListLayout")
-    navLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    navLayout.Padding = UDim.new(0, 8)
-    navLayout.Parent = navbar
+    -- Row 1 (title + header buttons) and row 2 (tab pills) are now
+    -- positioned manually with explicit Position, instead of relying on
+    -- a UIListLayout to stack them. A UIListLayout parented directly to
+    -- navbar was failing to position its children on some executors —
+    -- titleRow and tabBar both stayed at their default {0,0} position
+    -- and ended up stacked on top of each other, invisible (since both
+    -- are BackgroundTransparency = 1) even though the buttons inside
+    -- them were still there and clickable. Manual Position removes the
+    -- dependency on that layout instance entirely for this critical
+    -- positioning.
+    navbar.AutomaticSize = Enum.AutomaticSize.None
+    navbar.Size = UDim2.new(1, 0, 0, 80)
 
     local titleRow = Instance.new("Frame")
     titleRow.Name = "TitleRow"
-    titleRow.Size = UDim2.new(1, 0, 0, 26)
+    titleRow.Size = UDim2.new(1, -24, 0, 26)
+    titleRow.Position = UDim2.new(0, 14, 0, 10)
     titleRow.LayoutOrder = 1
     titleRow.BackgroundTransparency = 1
     titleRow.ZIndex = 6
     titleRow.Parent = navbar
 
-    local titleRowLayout = Instance.new("UIListLayout")
-    titleRowLayout.FillDirection = Enum.FillDirection.Horizontal
-    titleRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    titleRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    titleRowLayout.Padding = UDim.new(0, 8)
-    titleRowLayout.Parent = titleRow
-
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -90, 1, 0) -- shrinks to fit, header buttons take the rest
-    title.LayoutOrder = 1
+    title.Size = UDim2.new(1, -90, 1, 0) -- leaves room for the two header buttons on the right
+    title.Position = UDim2.new(0, 0, 0, 0)
     title.BackgroundTransparency = 1
     title.Text = "BOUNTY HUNTER"
     title.TextColor3 = TEXT
@@ -269,33 +267,37 @@ local function createNewLayoutUI()
     --==================================================
     local tabBar = Instance.new("Frame")
     tabBar.Name = "TabRow"
-    tabBar.Size = UDim2.new(1, 0, 0, 26)
+    tabBar.Size = UDim2.new(1, -24, 0, 26)
+    tabBar.Position = UDim2.new(0, 14, 0, 44) -- below titleRow (10 top pad + 26 titleRow height + 8 gap)
     tabBar.LayoutOrder = 2
     tabBar.ClipsDescendants = false
     tabBar.BackgroundTransparency = 1
     tabBar.ZIndex = 6
     tabBar.Parent = navbar
 
-    local tabList = Instance.new("UIListLayout")
-    tabList.FillDirection = Enum.FillDirection.Horizontal
-    tabList.VerticalAlignment = Enum.VerticalAlignment.Center
-    tabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    tabList.Padding = UDim.new(0, 6)
-    tabList.SortOrder = Enum.SortOrder.LayoutOrder
-    tabList.Parent = tabBar
-
     local tabButtons = {}
     local tabContainers = {}
     local activeTabName = "DASHBOARD"
 
+    local TAB_COUNT = 4
+    local TAB_GAP = 6
+    -- Each tab's width as a Scale fraction of tabBar, minus its share of
+    -- the gaps, so 4 tabs + 3 gaps fill tabBar exactly with no layout
+    -- instance needed at all.
+    local TAB_WIDTH_SCALE = 1 / TAB_COUNT
+
     local function createTabButton(name, label, order)
         local b = Instance.new("TextButton")
-        -- ~23.5% width each (4 tabs + 3 gaps of 6px fit in tabBar's
-        -- width) via Scale, minus a small offset so 4 fit with padding.
-        -- Scale-based sizing means the button has a real, non-zero size
-        -- immediately on creation, independent of whether the list
-        -- layout instance itself is fully supported by the executor.
-        b.Size = UDim2.new(0.235, 0, 1, 0)
+        -- Manual horizontal Position instead of a UIListLayout: this
+        -- whole navbar had a UIListLayout (parented directly to navbar)
+        -- silently fail to position its children on the user's executor
+        -- (title/tabs stayed at their {0,0} default and stacked
+        -- invisibly, though still clickable). To be safe, tab buttons
+        -- are positioned the same explicit way rather than trusting
+        -- another UIListLayout one level down.
+        local index = order - 1
+        b.Size = UDim2.new(TAB_WIDTH_SCALE, -(TAB_GAP * (TAB_COUNT - 1) / TAB_COUNT), 1, 0)
+        b.Position = UDim2.new(TAB_WIDTH_SCALE * index, (TAB_GAP * index) - (TAB_GAP * (TAB_COUNT - 1) / TAB_COUNT) * index, 0, 0)
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
@@ -321,10 +323,11 @@ local function createNewLayoutUI()
     createTabButton("HOP", "HOP", 4)
 
     -- header buttons: collapse / stop (top-right, same row as title)
-    local function headerButton(icon, order, size)
+    local function headerButton(icon, rightOffset, size)
         local b = Instance.new("TextButton")
         b.Size = UDim2.fromOffset(size or 30, size or 30)
-        b.LayoutOrder = order
+        b.AnchorPoint = Vector2.new(1, 0.5)
+        b.Position = UDim2.new(1, -rightOffset, 0.5, 0)
         b.BackgroundColor3 = CARD2
         b.BackgroundTransparency = 1
         b.Text = icon
@@ -349,11 +352,14 @@ local function createNewLayoutUI()
         return b
     end
 
-    local hideBtn = headerButton("><", 2, 30)
-    hideBtn.TextSize = 11
-
-    local stopBtn = headerButton("×", 3, 28)
+    -- Positioned manually from the right edge of titleRow instead of via
+    -- LayoutOrder + UIListLayout (same reasoning as titleRow/tabBar above):
+    -- stopBtn (×) sits at the far right, hideBtn (><) just to its left.
+    local stopBtn = headerButton("×", 4, 28)
     stopBtn.TextSize = 16
+
+    local hideBtn = headerButton("><", 38, 30)
+    hideBtn.TextSize = 11
 
     --==================================================
     -- CARDS LAYER — everything below the navbar. This is a plain
