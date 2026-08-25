@@ -131,8 +131,13 @@ local function createNewLayoutUI()
     -- and the content card below it (they were rendering flush together
     -- before because the gap in Scale units was too small).
     local ANCHOR_X = 0.5
-    local ANCHOR_Y_TABBAR = 0.30
+    local ANCHOR_Y_TABBAR = 0.14 -- moved up from 0.30 so it doesn't sit too low by default
     local TABBAR_TO_CARD_GAP = 14 -- pixels, fixed regardless of screen size
+
+    -- Both floating pieces (tabbar + main card) now move together when the
+    -- tabbar is dragged. We track the tabbar's live position here and
+    -- reposition `main` underneath it on every drag update.
+    local tabBarPosition -- set once tabBarFrame is created below
 
     --==================================================
     -- TAB BAR — floats independently at the top. Contains the live
@@ -152,6 +157,8 @@ local function createNewLayoutUI()
     addShadow(tabBarFrame, 0.5)
     uistroke(tabBarFrame, STROKE, 1, 0.25)
     gradient(tabBarFrame, Color3.fromRGB(60, 60, 60), Color3.fromRGB(38, 38, 38), 90)
+
+    tabBarPosition = tabBarFrame.Position
 
     -- Status dot, doubles as a small live "is it working" indicator
     -- even when the content card is hidden.
@@ -259,6 +266,68 @@ local function createNewLayoutUI()
     addShadow(main, 0.5)
     uistroke(main, STROKE, 1, 0.2)
     gradient(main, Color3.fromRGB(60, 60, 60), Color3.fromRGB(38, 38, 38), 90)
+
+    --==================================================
+    -- DRAG (tabbar is the handle; main card follows underneath it,
+    -- keeping the same 46px + gap offset it had at creation time).
+    -- Works with touch (phone) and mouse alike.
+    --==================================================
+    local dragging = false
+    local dragInputStart
+    local dragTabBarStart
+
+    local function beginDrag(input)
+        dragging = true
+        dragInputStart = input.Position
+        dragTabBarStart = tabBarFrame.Position
+    end
+
+    local function updateDrag(input)
+        if not dragging then return end
+        local delta = input.Position - dragInputStart
+
+        local newTabBarPos = UDim2.new(
+            dragTabBarStart.X.Scale,
+            dragTabBarStart.X.Offset + delta.X,
+            dragTabBarStart.Y.Scale,
+            dragTabBarStart.Y.Offset + delta.Y
+        )
+        tabBarFrame.Position = newTabBarPos
+
+        -- main card keeps the same fixed offset below the tabbar it had
+        -- when it was first positioned (46 = tabbar height, then the gap)
+        main.Position = UDim2.new(
+            newTabBarPos.X.Scale,
+            newTabBarPos.X.Offset,
+            newTabBarPos.Y.Scale,
+            newTabBarPos.Y.Offset + 46 + TABBAR_TO_CARD_GAP
+        )
+    end
+
+    local function endDrag()
+        dragging = false
+    end
+
+    tabBarFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            beginDrag(input)
+        end
+    end)
+
+    tabBarFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            endDrag()
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateDrag(input)
+        end
+    end)
 
     --==================================================
     -- TAB CONTENT AREA (all tabs share this same rectangle inside

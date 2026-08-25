@@ -212,12 +212,17 @@ local RealIslandCenter = {
 -- ==========================================
 -- LOAD UI MODULE (ui.lua)
 -- ==========================================
+-- cache-busting: raw.githubusercontent.com di-cache oleh CDN GitHub
+-- selama beberapa menit per URL persis. Nambahin query string random
+-- bikin tiap request keliatan sebagai URL baru buat CDN-nya, jadi
+-- selalu ambil versi ui.lua terbaru dari repo, bukan versi lama.
 local UI_RAW_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/ui.lua"
+    .. "?v=" .. tostring(math.random(1, 1000000000)) .. tostring(tick())
 
 local UIModule
 do
     local ok, result = pcall(function()
-        return loadstring(game:HttpGet(UI_RAW_URL))()
+        return loadstring(game:HttpGet(UI_RAW_URL, true))()
     end)
 
     if ok and result then
