@@ -17,16 +17,16 @@ function UIModule.Init(SafeUIParent, state)
 
 local UI_NAME = "BountyHunterDashboard"
 
--- ---- palette (Maroon & Sand theme) ----
-local BG        = Color3.fromRGB(31, 7, 13)     -- deep maroon-black backdrop
-local CARD      = Color3.fromRGB(85, 11, 24)    -- #550B18 maroon
-local CARD2     = Color3.fromRGB(105, 20, 35)   -- lighter maroon for hover/press
-local STROKE    = Color3.fromRGB(140, 60, 70)   -- muted rose-maroon border
-local TEXT      = Color3.fromRGB(242, 229, 197) -- #F2E5C5 sand
-local MUTED     = Color3.fromRGB(200, 175, 145) -- dimmer sand
-local ACCENT    = Color3.fromRGB(242, 229, 197) -- #F2E5C5 sand (used as the "gold" accent)
-local ACCENT_2  = Color3.fromRGB(214, 195, 150) -- deeper sand for gradient
-local ACCENT_TEXT = Color3.fromRGB(45, 12, 18)  -- dark maroon text on top of sand backgrounds
+-- ---- palette (Mono: Black / White / Warm Grey theme) ----
+local BG        = Color3.fromRGB(20, 20, 20)    -- near-black backdrop, slightly darker than CARD
+local CARD      = Color3.fromRGB(51, 51, 51)    -- #333333 hitam
+local CARD2     = Color3.fromRGB(70, 70, 70)    -- lighter grey for hover/press
+local STROKE    = Color3.fromRGB(112, 108, 97)  -- #706C61 abu coklat, used as border
+local TEXT      = Color3.fromRGB(255, 255, 255) -- #FFFFFF putih
+local MUTED     = Color3.fromRGB(180, 176, 166) -- dimmer warm grey
+local ACCENT    = Color3.fromRGB(255, 255, 255) -- #FFFFFF putih (used as the accent)
+local ACCENT_2  = Color3.fromRGB(112, 108, 97)  -- #706C61 abu coklat for gradient
+local ACCENT_TEXT = Color3.fromRGB(51, 51, 51)  -- #333333 dark text on top of white accent backgrounds
 local GREEN     = Color3.fromRGB(120, 200, 130)
 local ORANGE    = Color3.fromRGB(230, 165, 90)
 local RED       = Color3.fromRGB(220, 90, 90)
@@ -151,7 +151,7 @@ local function createNewLayoutUI()
     corner(tabBarFrame, 23) -- full pill (half of 46px height)
     addShadow(tabBarFrame, 0.5)
     uistroke(tabBarFrame, STROKE, 1, 0.25)
-    gradient(tabBarFrame, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
+    gradient(tabBarFrame, Color3.fromRGB(60, 60, 60), Color3.fromRGB(38, 38, 38), 90)
 
     -- Status dot, doubles as a small live "is it working" indicator
     -- even when the content card is hidden.
@@ -258,7 +258,7 @@ local function createNewLayoutUI()
     corner(main, 22)
     addShadow(main, 0.5)
     uistroke(main, STROKE, 1, 0.2)
-    gradient(main, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
+    gradient(main, Color3.fromRGB(60, 60, 60), Color3.fromRGB(38, 38, 38), 90)
 
     --==================================================
     -- TAB CONTENT AREA (all tabs share this same rectangle inside
@@ -709,7 +709,7 @@ local function createNewLayoutUI()
     logo.Parent = gui
     corner(logo, 26) -- perfect circle at 52x52
     uistroke(logo, STROKE, 1, 0.15)
-    gradient(logo, Color3.fromRGB(95, 15, 30), Color3.fromRGB(50, 5, 12), 90)
+    gradient(logo, Color3.fromRGB(60, 60, 60), Color3.fromRGB(30, 30, 30), 90)
 
     local logoZ = Instance.new("TextLabel")
     logoZ.Size = UDim2.fromOffset(36, 36)
@@ -894,7 +894,7 @@ local function createNewLayoutUI()
     confirmPopup.Parent = gui
     corner(confirmPopup, 14)
     uistroke(confirmPopup, STROKE, 1, 0.15)
-    gradient(confirmPopup, Color3.fromRGB(27, 28, 34), Color3.fromRGB(18, 19, 23), 90)
+    gradient(confirmPopup, Color3.fromRGB(45, 45, 45), Color3.fromRGB(25, 25, 25), 90)
 
     local confirmTitle = Instance.new("TextLabel")
     confirmTitle.Size = UDim2.new(1, -32, 0, 20)
