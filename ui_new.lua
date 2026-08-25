@@ -217,24 +217,118 @@ local function createUI()
         c.Size = UDim2.new(1, 0, 1, 0)
         c.BackgroundTransparency = 1
         c.Visible = (name == "DASHBOARD")
-        c.Parent = contentLayer
+        -- DASHBOARD is the fixed base and lives permanently in
+        -- contentLayer. Other tabs are NOT parented to contentLayer at
+        -- all — they only get parented (into a floating holder) once
+        -- their tab button is clicked, see openFloating() below.
+        c.Parent = (name == "DASHBOARD") and contentLayer or nil
         tabContainers[name] = c
         return c
     end
 
-    local function setActiveTab(name)
-        if not tabContainers[name] then return end
-        activeTabName = name
-        for tabName, container in pairs(tabContainers) do
-            container.Visible = (tabName == name)
-        end
-        for tabName, btn in pairs(tabButtons) do
-            if tabName == name then
-                tween(btn, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 225, 170) })
-            else
-                tween(btn, 0.12, { BackgroundColor3 = SAND })
+    -- ==================================================
+    -- FLOATING PANELS — clicking a non-DASHBOARD tab opens its
+    -- container as a separate floating card next to root, instead of
+    -- swapping root's content. DASHBOARD itself is not a floating
+    -- panel — it's the fixed base and is always visible in root.
+    -- Rules: max 3 floating panels at once (FIFO — oldest auto-closes
+    -- when a 4th is opened); clicking a tab that's already open closes
+    -- just that one (toggle).
+    -- ==================================================
+    local MAX_FLOATING = 3
+    local floatingOrder = {} -- array of tab names currently floating, oldest first
+    local floatingFrames = {} -- name -> the floating holder Frame
+    local FLOAT_GAP = 10
+
+    local function layoutFloatingPanels()
+        -- Positions each open floating panel to the right of root,
+        -- stacked top-to-bottom so none overlap each other.
+        local count = #floatingOrder
+        if count == 0 then return end
+        local panelHeight = (1 - (FLOAT_GAP / 100) * (count - 1)) / count
+        for i, name in ipairs(floatingOrder) do
+            local holder = floatingFrames[name]
+            if holder then
+                local targetPos = UDim2.new(1, 16, (i - 1) * (panelHeight + 0.03), 0)
+                local targetSize = UDim2.new(0.62, 0, panelHeight, 0)
+                if holder:GetAttribute("Placed") then
+                    tween(holder, 0.18, { Position = targetPos, Size = targetSize })
+                else
+                    holder:SetAttribute("Placed", true)
+                    holder.Position = targetPos
+                    holder.Size = targetSize
+                end
             end
         end
+    end
+
+    local function closeFloating(name, skipLayout)
+        local holder = floatingFrames[name]
+        if not holder then return end
+        for i, n in ipairs(floatingOrder) do
+            if n == name then table.remove(floatingOrder, i) break end
+        end
+        floatingFrames[name] = nil
+        local t = tween(holder, 0.15, {
+            Position = UDim2.new(1, 60, holder.Position.Y.Scale, holder.Position.Y.Offset),
+        })
+        local strokeFade = holder:FindFirstChildOfClass("UIStroke")
+        for _, child in ipairs(holder:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("Frame") or child:IsA("ImageLabel") then
+                pcall(function() tween(child, 0.15, { BackgroundTransparency = 1 }) end)
+            end
+        end
+        task.delay(0.16, function()
+            holder:Destroy()
+        end)
+        tween(tabButtons[name], 0.12, { BackgroundColor3 = SAND })
+        if not skipLayout then layoutFloatingPanels() end
+    end
+
+    local function openFloating(name)
+        local container = tabContainers[name]
+        if not container then return end
+
+        -- If it's already open, treat the click as a close (toggle).
+        if floatingFrames[name] then
+            closeFloating(name)
+            return
+        end
+
+        -- Enforce the 3-panel cap: close the oldest (FIFO) first.
+        if #floatingOrder >= MAX_FLOATING then
+            closeFloating(floatingOrder[1], true)
+        end
+
+        local holder = Instance.new("Frame")
+        holder.Name = name .. "Float"
+        holder.AnchorPoint = Vector2.new(0, 0)
+        holder.BackgroundTransparency = 1
+        holder.Position = UDim2.new(1, 60, 0, 0) -- start off to the right, slides in
+        holder.Size = UDim2.new(0.62, 0, 0.3, 0)
+        holder.ZIndex = 20
+        holder.Parent = root
+
+        container.Parent = holder
+        container.Position = UDim2.new(0, 0, 0, 0)
+        container.Size = UDim2.new(1, 0, 1, 0)
+        container.Visible = true
+
+        floatingFrames[name] = holder
+        table.insert(floatingOrder, name)
+
+        layoutFloatingPanels()
+        tween(tabButtons[name], 0.12, { BackgroundColor3 = Color3.fromRGB(255, 225, 170) })
+    end
+
+    local function setActiveTab(name)
+        if name == "DASHBOARD" then
+            activeTabName = name
+            tabContainers["DASHBOARD"].Visible = true
+            tween(tabButtons["DASHBOARD"], 0.12, { BackgroundColor3 = Color3.fromRGB(255, 225, 170) })
+            return
+        end
+        openFloating(name)
     end
 
     for name, btn in pairs(tabButtons) do
@@ -412,10 +506,14 @@ local function createUI()
     for _, name in ipairs(placeholderTabs) do
         local tab = newTabContainer(name)
         local placeholderCard = newCard(tab, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0))
-        label(placeholderCard, name .. " — placeholder", UDim2.new(0, 14, 0, 14), UDim2.new(1, -28, 0, 20), 14, MUTED, Enum.Font.GothamBold)
+        placeholderCard.ZIndex = 20
+        label(placeholderCard, name .. " (floating panel)", UDim2.new(0, 14, 0, 14), UDim2.new(1, -28, 0, 20), 14, MUTED, Enum.Font.GothamBold)
+        label(placeholderCard, "Klik tab ini lagi buat nutup.", UDim2.new(0, 14, 0, 38), UDim2.new(1, -28, 0, 18), 11, MUTED)
     end
 
     UIRefs.setActiveTab = setActiveTab
+    UIRefs.openFloating = openFloating
+    UIRefs.closeFloating = closeFloating
     UIRefs.gui = gui
     UIRefs.root = root
     UIRefs.navbarHolder = navbarHolder
