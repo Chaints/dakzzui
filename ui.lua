@@ -150,6 +150,20 @@ local function createNewLayoutUI()
     root.BackgroundTransparency = 1
     root.Parent = gui
 
+    -- Stack navbar and cardsLayer vertically via a real UIListLayout
+    -- instead of manually offsetting cardsLayer's Position based on
+    -- navbar.AbsoluteSize. Manual absolute positioning like that made
+    -- root's AutomaticSize.Y calculation unreliable (root couldn't
+    -- always tell how tall the manually-offset content actually was),
+    -- which is what caused the navbar and cards to visually merge/
+    -- overlap instead of showing a clean gap between them. A proper
+    -- list layout makes the gap and total height consistent no matter
+    -- how tall the navbar or the active tab's cards are.
+    local rootLayout = Instance.new("UIListLayout")
+    rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rootLayout.Padding = UDim.new(0, 16) -- visible gap between navbar and cards
+    rootLayout.Parent = root
+
     -- Clamp the auto-scaled width to a sane pixel range so it still
     -- looks like the intended two-column layout on both small phones
     -- and large screens.
@@ -177,13 +191,13 @@ local function createNewLayoutUI()
     navbar.Name = "Navbar"
     navbar.Size = UDim2.new(1, 0, 0, 0)
     navbar.AutomaticSize = Enum.AutomaticSize.Y
-    navbar.Position = UDim2.fromOffset(0, 0)
     navbar.BackgroundColor3 = CARD
     navbar.BorderSizePixel = 0
     navbar.ZIndex = 10
+    navbar.LayoutOrder = 1
     navbar.Parent = root
     corner(navbar, 20)
-    addShadow(navbar, 0.5)
+
     uistroke(navbar, STROKE, 1, 0.2)
     gradient(navbar, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
@@ -329,28 +343,15 @@ local function createNewLayoutUI()
     cardsLayer.Name = "CardsLayer"
     cardsLayer.Size = UDim2.new(1, 0, 0, 0)
     cardsLayer.AutomaticSize = Enum.AutomaticSize.Y
-    cardsLayer.Position = UDim2.new(0, 0, 0, 0)
     cardsLayer.BackgroundTransparency = 1
     cardsLayer.ZIndex = 1
+    cardsLayer.LayoutOrder = 2
     cardsLayer.Parent = root
 
     local cardsLayerLayout = Instance.new("UIListLayout")
     cardsLayerLayout.SortOrder = Enum.SortOrder.LayoutOrder
     cardsLayerLayout.Parent = cardsLayer
 
-    -- Position cardsLayer under the navbar once the navbar's real
-    -- (auto-sized) height is known. AbsoluteSize only updates after the
-    -- engine finishes a layout pass, which doesn't happen synchronously
-    -- when we just set AutomaticSize/Size in this same script frame — so
-    -- calling this immediately reads a stale (often 0) AbsoluteSize.Y and
-    -- plants cardsLayer right under the navbar's old/collapsed height,
-    -- making the cards overlap and cover the navbar. Defer the initial
-    -- call by a frame so AbsoluteSize has actually been recalculated.
-    local function repositionCardsLayer()
-        cardsLayer.Position = UDim2.new(0, 0, 0, navbar.AbsoluteSize.Y + 10)
-    end
-    navbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(repositionCardsLayer)
-    task.defer(repositionCardsLayer)
 
     local function newTabContainer(name)
         local c = Instance.new("Frame")
@@ -419,7 +420,7 @@ local function createNewLayoutUI()
     statusCard.BorderSizePixel = 0
     statusCard.Parent = dashRow
     corner(statusCard, 20)
-    addShadow(statusCard, 0.55)
+
     uistroke(statusCard, STROKE, 1, 0.5)
 
     local statusCardTitle = Instance.new("TextLabel")
@@ -487,7 +488,7 @@ local function createNewLayoutUI()
     info.BorderSizePixel = 0
     info.Parent = dashRow
     corner(info, 20)
-    addShadow(info, 0.55)
+
     uistroke(info, STROKE, 1, 0.5)
 
     local infoTitle = Instance.new("TextLabel")
@@ -619,7 +620,7 @@ local function createNewLayoutUI()
     logFrame.BorderSizePixel = 0
     logFrame.Parent = targetsTab
     corner(logFrame, 20)
-    addShadow(logFrame, 0.55)
+
     uistroke(logFrame, STROKE, 1, 0.5)
 
     local logTitle = Instance.new("TextLabel")
@@ -694,7 +695,7 @@ local function createNewLayoutUI()
     combatCard.BorderSizePixel = 0
     combatCard.Parent = combatTab
     corner(combatCard, 20)
-    addShadow(combatCard, 0.55)
+
     uistroke(combatCard, STROKE, 1, 0.5)
 
     local combatTitle = Instance.new("TextLabel")
@@ -855,7 +856,7 @@ local function createNewLayoutUI()
     hopBtn.Text = ""
     hopBtn.Parent = hopTab
     corner(hopBtn, 20)
-    addShadow(hopBtn, 0.55)
+
     uistroke(hopBtn, STROKE, 1, 0.5)
 
     local hopDot = Instance.new("Frame")
