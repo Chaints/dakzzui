@@ -787,6 +787,10 @@ local function createNewLayoutUI()
         or input.UserInputType == Enum.UserInputType.MouseButton1 then
             if draggingSpeedUI then
                 tween(knob, 0.1, { Size = UDim2.fromOffset(16, 16) })
+                -- persist speed once the drag ends, not every frame
+                if state.SaveConfig then
+                    state.SaveConfig()
+                end
             end
             draggingSpeedUI = false
         end
@@ -898,6 +902,12 @@ local function createNewLayoutUI()
             else
                 tween(chip, 0.12, { BackgroundColor3 = CARD2 })
                 chipLabel.TextColor3 = TEXT
+            end
+            -- persist immediately: without this, skill selection only lives
+            -- in _G.CombatConfig (RAM) and resets to default on a fresh
+            -- server/execute since the JSON file on disk never gets updated
+            if state.SaveConfig then
+                state.SaveConfig()
             end
         end)
 

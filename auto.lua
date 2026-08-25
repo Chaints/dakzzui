@@ -207,6 +207,7 @@ local state = {
     currentTargetPlayer = nil,
     totalHadiah = 0,
     stopRequested = false,
+    SaveConfig = saveConfig,           -- exposed so ui.lua can persist config changes (skill toggles, speed, etc.) to disk immediately instead of only in memory
 }
 
 -- Loaded lazily right before startHuntingLoop/stopAllThreads are defined,
