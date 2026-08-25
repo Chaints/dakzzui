@@ -243,6 +243,7 @@ local state = {
     isHunting = false,
     uiHidden = false,
     stopRequested = false,
+    totalHadiah = 0, -- mirrors totalHadiahDiperoleh below, read-only from the UI's side
 }
 
 -- UI is a table with { createNewLayoutUI, updateHUDDisplay, UIRefs },
@@ -293,6 +294,7 @@ task.spawn(function()
         task.wait(0.1)
         state.currentTargetPlayer = currentTargetPlayer
         state.isHunting = isHunting
+        state.totalHadiah = totalHadiahDiperoleh
 
         if state.manualSkipRequested then
             manualSkipRequested = true

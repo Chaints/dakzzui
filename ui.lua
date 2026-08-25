@@ -255,7 +255,7 @@ local function createNewLayoutUI()
     --==================================================
     local main = Instance.new("Frame")
     main.Name = "Main"
-    main.Size = UDim2.fromOffset(390, 210)
+    main.Size = UDim2.fromOffset(390, 264)
     main.AnchorPoint = Vector2.new(ANCHOR_X, 0)
     main.Position = UDim2.new(ANCHOR_X, 0, ANCHOR_Y_TABBAR, 46 + TABBAR_TO_CARD_GAP)
     main.BackgroundColor3 = BG
@@ -334,7 +334,7 @@ local function createNewLayoutUI()
     -- the content card, only the active one is Visible)
     --==================================================
     local tabContentY = 16
-    local tabContentHeight = 178
+    local tabContentHeight = 232 -- grew to fit SKIP TARGET + reordered BOUNTY/TOTAL rows in the info card
 
     local function newTabContainer(name)
         local c = Instance.new("Frame")
@@ -389,6 +389,32 @@ local function createNewLayoutUI()
     infoTitle.TextXAlignment = Enum.TextXAlignment.Left
     infoTitle.Parent = info
 
+    --==================================================
+    -- SKIP TARGET (moved here from Combat tab; sits right under the
+    -- title, above STATUS, so it's an at-a-glance action next to the
+    -- target info it affects)
+    --==================================================
+    local skipBtn = Instance.new("TextButton")
+    skipBtn.Size = UDim2.new(1, -28, 0, 30)
+    skipBtn.Position = UDim2.fromOffset(14, 32)
+    skipBtn.BackgroundColor3 = CARD2
+    skipBtn.AutoButtonColor = false
+    skipBtn.Text = ""
+    skipBtn.Parent = info
+    corner(skipBtn, 14)
+    uistroke(skipBtn, STROKE, 1, 0.4)
+
+    local skipLabel = Instance.new("TextLabel")
+    skipLabel.Size = UDim2.new(1, 0, 1, 0)
+    skipLabel.BackgroundTransparency = 1
+    skipLabel.Text = "SKIP TARGET"
+    skipLabel.TextColor3 = TEXT
+    skipLabel.TextSize = 10
+    skipLabel.Font = Enum.Font.GothamMedium
+    skipLabel.Parent = skipBtn
+
+    pressFeedback(skipBtn, CARD2, CARD)
+
     local infoValues = {}
 
     local function infoRow(name, value, y)
@@ -423,47 +449,83 @@ local function createNewLayoutUI()
         return b
     end
 
-    infoRow("STATUS", "Idle / Mencari...", 34)
-    infoRow("NAMA", "-", 55)
-    infoRow("LEVEL", "-", 76)
-    infoRow("JARAK", "-", 97)
+    -- Rows shifted down 40px total to make room for the SKIP TARGET button.
+    -- BOUNTY (current target's bounty) now comes right after JARAK.
+    infoRow("STATUS", "Idle / Mencari...", 74)
+    infoRow("NAMA", "-", 95)
+    infoRow("LEVEL", "-", 116)
+    infoRow("JARAK", "-", 137)
+
+    local bountyRow = Instance.new("Frame")
+    bountyRow.Size = UDim2.new(1, -28, 0, 19)
+    bountyRow.Position = UDim2.fromOffset(14, 158)
+    bountyRow.BackgroundTransparency = 1
+    bountyRow.Parent = info
+
+    local bountyLabel = Instance.new("TextLabel")
+    bountyLabel.Size = UDim2.new(0.4, 0, 1, 0)
+    bountyLabel.BackgroundTransparency = 1
+    bountyLabel.Text = "BOUNTY"
+    bountyLabel.TextColor3 = MUTED
+    bountyLabel.TextSize = 9
+    bountyLabel.Font = Enum.Font.Gotham
+    bountyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    bountyLabel.Parent = bountyRow
+
+    local bountyValue = Instance.new("TextLabel")
+    bountyValue.Size = UDim2.new(0.6, 0, 1, 0)
+    bountyValue.Position = UDim2.new(0.4, 0, 0, 0)
+    bountyValue.BackgroundTransparency = 1
+    bountyValue.Text = "◈ -"
+    bountyValue.TextColor3 = TEXT
+    bountyValue.TextSize = 9
+    bountyValue.Font = Enum.Font.GothamMedium
+    bountyValue.TextXAlignment = Enum.TextXAlignment.Right
+    bountyValue.Parent = bountyRow
+
+    infoValues["BOUNTY"] = bountyValue
 
     local miniDivider = Instance.new("Frame")
     miniDivider.Size = UDim2.new(1, -28, 0, 1)
-    miniDivider.Position = UDim2.fromOffset(14, 122)
+    miniDivider.Position = UDim2.fromOffset(14, 186)
     miniDivider.BackgroundColor3 = STROKE
     miniDivider.BackgroundTransparency = 0.4
     miniDivider.BorderSizePixel = 0
     miniDivider.Parent = info
 
-    local bountyRow = Instance.new("Frame")
-    bountyRow.Size = UDim2.new(1, -28, 0, 26)
-    bountyRow.Position = UDim2.fromOffset(14, 128)
-    bountyRow.BackgroundTransparency = 1
-    bountyRow.Parent = info
+    --==================================================
+    -- TOTAL PENDAPATAN — cumulative bounty earned this session, mirrors
+    -- auto.lua's totalHadiahDiperoleh via state.totalHadiah (see the
+    -- polling loop further below that keeps this label live).
+    --==================================================
+    local totalRow = Instance.new("Frame")
+    totalRow.Size = UDim2.new(1, -28, 0, 26)
+    totalRow.Position = UDim2.fromOffset(14, 192)
+    totalRow.BackgroundTransparency = 1
+    totalRow.Parent = info
 
-    local bountyLabel = Instance.new("TextLabel")
-    bountyLabel.Size = UDim2.new(0.5, 0, 1, 0)
-    bountyLabel.BackgroundTransparency = 1
-    bountyLabel.Text = "BOUNTY"
-    bountyLabel.TextColor3 = MUTED
-    bountyLabel.TextSize = 9
-    bountyLabel.Font = Enum.Font.GothamBold
-    bountyLabel.TextXAlignment = Enum.TextXAlignment.Left
-    bountyLabel.Parent = bountyRow
+    local totalLabel = Instance.new("TextLabel")
+    totalLabel.Size = UDim2.new(0.55, 0, 1, 0)
+    totalLabel.BackgroundTransparency = 1
+    totalLabel.Text = "TOTAL PENDAPATAN"
+    totalLabel.TextColor3 = MUTED
+    totalLabel.TextSize = 9
+    totalLabel.Font = Enum.Font.GothamBold
+    totalLabel.TextXAlignment = Enum.TextXAlignment.Left
+    totalLabel.Parent = totalRow
 
-    local bountyValue = Instance.new("TextLabel")
-    bountyValue.Size = UDim2.new(0.5, 0, 1, 0)
-    bountyValue.Position = UDim2.new(0.5, 0, 0, 0)
-    bountyValue.BackgroundTransparency = 1
-    bountyValue.Text = "◈ -"
-    bountyValue.TextColor3 = ACCENT
-    bountyValue.TextSize = 12
-    bountyValue.Font = Enum.Font.GothamBold
-    bountyValue.TextXAlignment = Enum.TextXAlignment.Right
-    bountyValue.Parent = bountyRow
+    local totalValue = Instance.new("TextLabel")
+    totalValue.Size = UDim2.new(0.45, 0, 1, 0)
+    totalValue.Position = UDim2.new(0.55, 0, 0, 0)
+    totalValue.BackgroundTransparency = 1
+    totalValue.Text = "◈ 0"
+    totalValue.TextColor3 = ACCENT
+    totalValue.TextSize = 12
+    totalValue.Font = Enum.Font.GothamBold
+    totalValue.TextXAlignment = Enum.TextXAlignment.Right
+    totalValue.Parent = totalRow
 
-    infoValues["BOUNTY"] = bountyValue
+    infoValues["TOTAL"] = totalValue
 
     --==================================================
     -- TAB: TARGETS — session kill log (resets on script reload,
@@ -676,28 +738,6 @@ local function createNewLayoutUI()
             end
         end
     end)
-
-    -- SKIP TARGET button lives in the Combat tab too (it's a combat action)
-    local skipBtn = Instance.new("TextButton")
-    skipBtn.Size = UDim2.new(1, -28, 0, 36)
-    skipBtn.Position = UDim2.fromOffset(14, 86)
-    skipBtn.BackgroundColor3 = CARD2
-    skipBtn.AutoButtonColor = false
-    skipBtn.Text = ""
-    skipBtn.Parent = combatCard
-    corner(skipBtn, 16)
-    uistroke(skipBtn, STROKE, 1, 0.4)
-
-    local skipLabel = Instance.new("TextLabel")
-    skipLabel.Size = UDim2.new(1, 0, 1, 0)
-    skipLabel.BackgroundTransparency = 1
-    skipLabel.Text = "SKIP TARGET"
-    skipLabel.TextColor3 = TEXT
-    skipLabel.TextSize = 10
-    skipLabel.Font = Enum.Font.GothamMedium
-    skipLabel.Parent = skipBtn
-
-    pressFeedback(skipBtn, CARD2, CARD)
 
     --==================================================
     -- TAB: HOP — server hop button (bigger/clearer since it now
@@ -1157,6 +1197,17 @@ local function createNewLayoutUI()
                 end
             else
                 tabBarStatusDot.BackgroundColor3 = MUTED
+            end
+
+            if infoValues["TOTAL"] then
+                local total = state.totalHadiah or 0
+                local formattedTotal = tostring(math.floor(total))
+                if total >= 1000000 then
+                    formattedTotal = string.format("%.1fM", total / 1000000)
+                elseif total >= 1000 then
+                    formattedTotal = string.format("%.1fK", total / 1000)
+                end
+                infoValues["TOTAL"].Text = "◈ " .. formattedTotal
             end
         end
     end)
