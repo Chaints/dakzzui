@@ -167,14 +167,28 @@ local function createNewLayoutUI()
     -- Clamp the auto-scaled width to a sane pixel range so it still
     -- looks like the intended two-column layout on both small phones
     -- and large screens.
+    -- Start hidden until the first successful clamp, so if AbsoluteSize
+    -- isn't ready yet on the very first frame(s), the user never sees the
+    -- brief unclamped 0.82-scale frame flash full-width/full-height.
+    root.Visible = false
+
     local function clampRootWidth()
         local screenW = gui.AbsoluteSize.X
-        if screenW <= 0 then return end
+        if screenW <= 0 then return false end
         local target = math.clamp(screenW * 0.82, 340, 620)
         root.Size = UDim2.new(0, target, 0, 0)
+        root.Visible = true
+        return true
     end
     gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampRootWidth)
-    task.defer(clampRootWidth)
+
+    task.spawn(function()
+        for _ = 1, 30 do -- retry across ~0.5s instead of giving up after one frame
+            if clampRootWidth() then return end
+            task.wait(0.02)
+        end
+        clampRootWidth() -- last attempt; if this also fails, AbsoluteSize genuinely isn't available yet and the signal above will catch it later
+    end)
 
     --==================================================
     -- NAVBAR — floating pill bar, standalone from any card below it.
@@ -266,7 +280,6 @@ local function createNewLayoutUI()
     tabGrid.CellSize = UDim2.new(0.25, -5, 1, 0) -- 4 equal columns, shrinks with tabBar
     tabGrid.SortOrder = Enum.SortOrder.LayoutOrder
     tabGrid.Parent = tabBar
-    uistroke(tabBar, Color3.fromRGB(255, 0, 0), 3, 0) -- DEBUG: red outline to see tabBar's real bounds
 
     local tabButtons = {}
     local tabContainers = {}
@@ -622,7 +635,7 @@ local function createNewLayoutUI()
     logFrame.Parent = targetsTab
     corner(logFrame, 20)
 
-    uistroke(logFrame, Color3.fromRGB(0, 255, 0), 4, 0)
+    uistroke(logFrame, STROKE, 1, 0.5)
 
     local logTitle = Instance.new("TextLabel")
     logTitle.Size = UDim2.new(1, -20, 0, 16)
@@ -697,7 +710,7 @@ local function createNewLayoutUI()
     combatCard.Parent = combatTab
     corner(combatCard, 20)
 
-    uistroke(combatCard, Color3.fromRGB(0, 150, 255), 4, 0)
+    uistroke(combatCard, STROKE, 1, 0.5)
 
     local combatTitle = Instance.new("TextLabel")
     combatTitle.Size = UDim2.new(1, -20, 0, 16)
@@ -858,7 +871,7 @@ local function createNewLayoutUI()
     hopBtn.Parent = hopTab
     corner(hopBtn, 20)
 
-    uistroke(hopBtn, Color3.fromRGB(255, 255, 0), 4, 0)
+    uistroke(hopBtn, STROKE, 1, 0.5)
 
     local hopDot = Instance.new("Frame")
     hopDot.Size = UDim2.fromOffset(10, 10)
@@ -1424,34 +1437,8 @@ local function createNewLayoutUI()
     -- Expose refs for updateHUDDisplay / auto.lua to use
     UIRefs.infoValues = infoValues
     UIRefs.addTargetLogEntry = addTargetLogEntry
-
-    -- DEBUG: dump every element under root so we can see exact names,
-    -- sizes, and visibility in the console instead of guessing from
-    -- screenshots. Remove this block once the mystery box is found.
-    task.defer(function()
-        print("========== UI DEBUG DUMP ==========")
-        local function dump(obj, depth)
-            local prefix = string.rep("  ", depth)
-            local sizeInfo = ""
-            pcall(function()
-                sizeInfo = string.format(
-                    " | Size=%s | AbsSize=%s | Visible=%s | BG=%s | Transp=%s",
-                    tostring(obj.Size),
-                    tostring(obj.AbsoluteSize),
-                    tostring(obj.Visible == nil and "N/A" or obj.Visible),
-                    obj:IsA("GuiObject") and tostring(obj.BackgroundColor3) or "N/A",
-                    obj:IsA("GuiObject") and tostring(obj.BackgroundTransparency) or "N/A"
-                )
-            end)
-            print(prefix .. obj.ClassName .. " '" .. obj.Name .. "'" .. sizeInfo)
-            for _, child in ipairs(obj:GetChildren()) do
-                dump(child, depth + 1)
-            end
-        end
-        dump(root, 0)
-        print("========== END DEBUG DUMP ==========")
-    end)
 end
+
 
 --==================================================
 -- HUD UPDATE (fills TARGET INFO card fields live)
