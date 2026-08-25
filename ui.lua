@@ -149,6 +149,7 @@ local function createNewLayoutUI()
     navbar.Position = UDim2.fromOffset(0, 0)
     navbar.BackgroundColor3 = CARD
     navbar.BorderSizePixel = 0
+    navbar.ZIndex = 10
     navbar.Parent = root
     corner(navbar, 20)
     addShadow(navbar, 0.5)
@@ -305,6 +306,7 @@ local function createNewLayoutUI()
     cardsLayer.AutomaticSize = Enum.AutomaticSize.Y
     cardsLayer.Position = UDim2.new(0, 0, 0, 0)
     cardsLayer.BackgroundTransparency = 1
+    cardsLayer.ZIndex = 1
     cardsLayer.Parent = root
 
     local cardsLayerLayout = Instance.new("UIListLayout")
@@ -312,12 +314,18 @@ local function createNewLayoutUI()
     cardsLayerLayout.Parent = cardsLayer
 
     -- Position cardsLayer under the navbar once the navbar's real
-    -- (auto-sized) height is known.
+    -- (auto-sized) height is known. AbsoluteSize only updates after the
+    -- engine finishes a layout pass, which doesn't happen synchronously
+    -- when we just set AutomaticSize/Size in this same script frame — so
+    -- calling this immediately reads a stale (often 0) AbsoluteSize.Y and
+    -- plants cardsLayer right under the navbar's old/collapsed height,
+    -- making the cards overlap and cover the navbar. Defer the initial
+    -- call by a frame so AbsoluteSize has actually been recalculated.
     local function repositionCardsLayer()
         cardsLayer.Position = UDim2.new(0, 0, 0, navbar.AbsoluteSize.Y + 10)
     end
     navbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(repositionCardsLayer)
-    repositionCardsLayer()
+    task.defer(repositionCardsLayer)
 
     local function newTabContainer(name)
         local c = Instance.new("Frame")
