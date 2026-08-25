@@ -75,8 +75,15 @@ local function addShadow(obj, intensity)
     shadow.Size = UDim2.new(1, 18, 1, 18)
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
-    shadow.ZIndex = (obj.ZIndex or 1) - 1
-    shadow.Parent = obj.Parent
+    shadow.ZIndex = -1 -- always render behind everything in its parent
+    -- IMPORTANT: parent to `obj` itself (not obj.Parent). The Size above
+    -- is Scale-relative to whatever this is parented to — parenting to
+    -- obj.Parent made a 100%+18px shadow relative to the WHOLE SCREEN
+    -- (since some callers' parent was the top-level ScreenGui), which
+    -- covered the entire display and blocked every click including
+    -- Roblox's own chat button. Parenting to obj makes the 100% actually
+    -- mean "100% of this card", which is what was intended.
+    shadow.Parent = obj
     return shadow
 end
 
@@ -119,9 +126,13 @@ local function createNewLayoutUI()
 
     -- Fixed anchor point both floating pieces are positioned relative to.
     -- Nothing here is draggable — it stays put, per request.
+    -- Positioned low enough to avoid Roblox's own chat/notification area
+    -- in the top-left, with a clear visual gap between the tab bar pill
+    -- and the content card below it (they were rendering flush together
+    -- before because the gap in Scale units was too small).
     local ANCHOR_X = 0.5
-    local ANCHOR_Y_TABBAR = 0.10
-    local ANCHOR_Y_CARD = 0.19
+    local ANCHOR_Y_TABBAR = 0.30
+    local TABBAR_TO_CARD_GAP = 14 -- pixels, fixed regardless of screen size
 
     --==================================================
     -- TAB BAR — floats independently at the top. Contains the live
@@ -239,7 +250,7 @@ local function createNewLayoutUI()
     main.Name = "Main"
     main.Size = UDim2.fromOffset(390, 210)
     main.AnchorPoint = Vector2.new(ANCHOR_X, 0)
-    main.Position = UDim2.new(ANCHOR_X, 0, ANCHOR_Y_CARD, 0)
+    main.Position = UDim2.new(ANCHOR_X, 0, ANCHOR_Y_TABBAR, 46 + TABBAR_TO_CARD_GAP)
     main.BackgroundColor3 = BG
     main.BorderSizePixel = 0
     main.ClipsDescendants = false
