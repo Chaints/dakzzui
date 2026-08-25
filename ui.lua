@@ -1535,6 +1535,14 @@ local function addTargetLogEntry(entryText)
 end
 
 --==================================================
+-- BUILD THE UI NOW
+-- (createNewLayoutUI was only ever DEFINED above, never CALLED —
+-- that's why nothing appeared: Init() built every function but the
+-- GUI itself was never actually constructed.)
+--==================================================
+createNewLayoutUI()
+
+--==================================================
 -- MODULE RETURN
 --==================================================
 return {
