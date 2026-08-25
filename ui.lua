@@ -268,6 +268,7 @@ local function createNewLayoutUI()
     tabBar.Name = "TabRow"
     tabBar.Size = UDim2.new(1, 0, 0, 26)
     tabBar.LayoutOrder = 2
+    tabBar.ClipsDescendants = false
     tabBar.BackgroundTransparency = 1
     tabBar.ZIndex = 6
     tabBar.Parent = navbar
@@ -287,6 +288,7 @@ local function createNewLayoutUI()
 
     local function createTabButton(name, label, order)
         local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0.25, -5, 1, 0) -- explicit starting size; UIGridLayout overrides this via CellSize, but some executors fail to apply CellSize to a child that starts at {0,0},{0,0}
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
