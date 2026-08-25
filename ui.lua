@@ -60,12 +60,9 @@ local function gradient(obj, c1, c2, rotation)
     return g
 end
 
--- Adds a soft drop-shadow behind `obj`, sized/positioned to match `obj`
--- exactly (parented to `obj` itself, filling it via Size=1,1 with a small
--- outward offset). This avoids the earlier bug where shadows were parented
--- to obj.Parent and sized relative to the parent's bounds — which caused
--- multiple same-parent siblings (like a row of tab buttons) to each stack
--- a parent-sized shadow on top of one another.
+-- Adds a soft drop-shadow behind `obj` using a pre-blurred rounded-rect
+-- image (cheap: one ImageLabel, no runtime blur calculation). Makes cards
+-- read as "floating" above the background instead of flat/flush with it.
 local function addShadow(obj, intensity)
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
@@ -78,17 +75,8 @@ local function addShadow(obj, intensity)
     shadow.Size = UDim2.new(1, 18, 1, 18)
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
-    -- Must render BEHIND obj's own background. A ZIndex merely "1 less"
-    -- doesn't guarantee that in all cases (e.g. once obj.ZIndex is raised
-    -- for layering above siblings, like the navbar's ZIndex=10), and if
-    -- the image asset ever fails to load, ImageLabel falls back to a
-    -- solid-colored block — which then shows up as a giant dark rectangle
-    -- covering the parent. Pin it to ZIndex 1 (lowest sane value) and,
-    -- more importantly, only ever use this on cards whose own ZIndex is
-    -- the default (1), not on elements deliberately raised above others.
-    shadow.ZIndex = 1
-    shadow.Parent = obj
-    shadow:SetAttribute("_isShadow", true)
+    shadow.ZIndex = (obj.ZIndex or 1) - 1
+    shadow.Parent = obj.Parent
     return shadow
 end
 
@@ -129,275 +117,153 @@ local function createNewLayoutUI()
     gui.DisplayOrder = 999
     gui.Parent = SafeUIParent
 
-    --==================================================
-    -- ROOT — an invisible anchor frame everything else positions
-    -- relative to and drags together as one unit. Purely structural,
-    -- has no visuals of its own.
-    --==================================================
-    local root = Instance.new("Frame")
-    root.Name = "Root"
-    -- Width is a fraction of the screen (Scale) instead of a fixed
-    -- pixel value — 620px fixed was wider than many phone screens'
-    -- actual game viewport, which squeezed the horizontal navbar
-    -- layout until Roblox couldn't lay it out properly (missing tabs,
-    -- everything crammed/rotated-looking). Clamping between a min and
-    -- max offset keeps it from getting silly-small on tiny phones or
-    -- absurdly wide on tablets/PC.
-    root.Size = UDim2.new(0.82, 0, 0, 0)
-    root.AutomaticSize = Enum.AutomaticSize.Y
-    root.AnchorPoint = Vector2.new(0.5, 0.5)
-    root.Position = UDim2.new(0.5, 0, 0.4, 0)
-    root.BackgroundTransparency = 1
-    root.Parent = gui
-
-    -- Stack navbar and cardsLayer vertically via a real UIListLayout
-    -- instead of manually offsetting cardsLayer's Position based on
-    -- navbar.AbsoluteSize. Manual absolute positioning like that made
-    -- root's AutomaticSize.Y calculation unreliable (root couldn't
-    -- always tell how tall the manually-offset content actually was),
-    -- which is what caused the navbar and cards to visually merge/
-    -- overlap instead of showing a clean gap between them. A proper
-    -- list layout makes the gap and total height consistent no matter
-    -- how tall the navbar or the active tab's cards are.
-    local rootLayout = Instance.new("UIListLayout")
-    rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    rootLayout.Padding = UDim.new(0, 16) -- visible gap between navbar and cards
-    rootLayout.Parent = root
-
-    -- Clamp the auto-scaled width to a sane pixel range so it still
-    -- looks like the intended two-column layout on both small phones
-    -- and large screens.
-    -- Start hidden until the first successful clamp, so if AbsoluteSize
-    -- isn't ready yet on the very first frame(s), the user never sees the
-    -- brief unclamped 0.82-scale frame flash full-width/full-height.
-    root.Visible = false
-
-    local function clampRootWidth()
-        local screenW = gui.AbsoluteSize.X
-        if screenW <= 0 then return false end
-        local target = math.clamp(screenW * 0.82, 340, 620)
-        root.Size = UDim2.new(0, target, 0, 0)
-        root.Visible = true
-        return true
-    end
-    gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampRootWidth)
-
-    task.spawn(function()
-        for _ = 1, 30 do -- retry across ~0.5s instead of giving up after one frame
-            if clampRootWidth() then return end
-            task.wait(0.02)
-        end
-        clampRootWidth() -- last attempt; if this also fails, AbsoluteSize genuinely isn't available yet and the signal above will catch it later
-    end)
+    -- Fixed anchor point both floating pieces are positioned relative to.
+    -- Nothing here is draggable — it stays put, per request.
+    local ANCHOR_X = 0.5
+    local ANCHOR_Y_TABBAR = 0.10
+    local ANCHOR_Y_CARD = 0.19
 
     --==================================================
-    -- NAVBAR — floating pill bar, standalone from any card below it.
-    -- Contains: title, tab pills (Dashboard/Targets/Combat/Hop),
-    -- collapse toggle (><), and stop (×). This whole bar is what you
-    -- drag to move the dashboard, and it's what stays on screen when
-    -- you tap "><" to collapse just the cards underneath it.
+    -- TAB BAR — floats independently at the top. Contains the live
+    -- status pill, the 4 section tabs, a toggle-card button, and
+    -- close. This piece stays visible even when the content card is
+    -- hidden (that's the whole point of splitting them).
     --==================================================
-    -- Single-row navbar (title, tab pills, collapse, stop all in one
-    -- horizontal strip) instead of the old two-row (title row + tab
-    -- row stacked) version — matches the reference layout and is
-    -- simpler to reason about since there's only one UIListLayout.
-    local navbar = Instance.new("Frame")
-    navbar.Name = "Navbar"
-    navbar.Size = UDim2.new(1, 0, 0, 0)
-    navbar.AutomaticSize = Enum.AutomaticSize.Y
-    navbar.BackgroundColor3 = CARD
-    navbar.BorderSizePixel = 0
-    navbar.ZIndex = 10
-    navbar.LayoutOrder = 1
-    navbar.Parent = root
-    corner(navbar, 20)
+    local tabBarFrame = Instance.new("Frame")
+    tabBarFrame.Name = "TabBar"
+    tabBarFrame.Size = UDim2.fromOffset(390, 46)
+    tabBarFrame.AnchorPoint = Vector2.new(ANCHOR_X, 0)
+    tabBarFrame.Position = UDim2.new(ANCHOR_X, 0, ANCHOR_Y_TABBAR, 0)
+    tabBarFrame.BackgroundColor3 = CARD
+    tabBarFrame.BorderSizePixel = 0
+    tabBarFrame.Parent = gui
+    corner(tabBarFrame, 23) -- full pill (half of 46px height)
+    addShadow(tabBarFrame, 0.5)
+    uistroke(tabBarFrame, STROKE, 1, 0.25)
+    gradient(tabBarFrame, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
-    uistroke(navbar, STROKE, 1, 0.2)
-    gradient(navbar, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
-
-    local navPadding = Instance.new("UIPadding")
-    navPadding.PaddingLeft = UDim.new(0, 14)
-    navPadding.PaddingRight = UDim.new(0, 10)
-    navPadding.PaddingTop = UDim.new(0, 10)
-    navPadding.PaddingBottom = UDim.new(0, 10)
-    navPadding.Parent = navbar
-
-    -- Row 1 (title + header buttons) and row 2 (tab pills) are now
-    -- positioned manually with explicit Position, instead of relying on
-    -- a UIListLayout to stack them. A UIListLayout parented directly to
-    -- navbar was failing to position its children on some executors —
-    -- titleRow and tabBar both stayed at their default {0,0} position
-    -- and ended up stacked on top of each other, invisible (since both
-    -- are BackgroundTransparency = 1) even though the buttons inside
-    -- them were still there and clickable. Manual Position removes the
-    -- dependency on that layout instance entirely for this critical
-    -- positioning.
-    navbar.AutomaticSize = Enum.AutomaticSize.None
-    navbar.Size = UDim2.new(1, 0, 0, 80)
-
-    local titleRow = Instance.new("Frame")
-    titleRow.Name = "TitleRow"
-    titleRow.Size = UDim2.new(1, -24, 0, 26)
-    titleRow.Position = UDim2.new(0, 14, 0, 10)
-    titleRow.LayoutOrder = 1
-    titleRow.BackgroundTransparency = 1
-    titleRow.ZIndex = 6
-    titleRow.Parent = navbar
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -90, 1, 0) -- leaves room for the two header buttons on the right
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "BOUNTY HUNTER"
-    title.TextColor3 = TEXT
-    title.TextSize = 12
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.TextTruncate = Enum.TextTruncate.AtEnd
-    title.Parent = titleRow
+    -- Status dot, doubles as a small live "is it working" indicator
+    -- even when the content card is hidden.
+    local tabBarStatusDot = Instance.new("Frame")
+    tabBarStatusDot.Size = UDim2.fromOffset(8, 8)
+    tabBarStatusDot.AnchorPoint = Vector2.new(0, 0.5)
+    tabBarStatusDot.Position = UDim2.new(0, 16, 0.5, 0)
+    tabBarStatusDot.BackgroundColor3 = MUTED
+    tabBarStatusDot.BorderSizePixel = 0
+    tabBarStatusDot.Parent = tabBarFrame
+    corner(tabBarStatusDot, 99)
 
     --==================================================
-    -- TAB BAR — full-width second row under the title. Switched from
-    -- UIGridLayout to a horizontal UIListLayout: GridLayout wasn't
-    -- rendering the tab buttons at all on some executors (buttons
-    -- ended up with no visible size/position), while ListLayout is a
-    -- much more basic/universally-supported layout instance. Each
-    -- button still gets an explicit Scale-based Size below so it has
-    -- a real size on its own even before the list layout arranges it.
+    -- 4 SECTION TABS, centered-ish in the pill
     --==================================================
-    local tabBar = Instance.new("Frame")
-    tabBar.Name = "TabRow"
-    tabBar.Size = UDim2.new(1, -24, 0, 26)
-    tabBar.Position = UDim2.new(0, 14, 0, 44) -- below titleRow (10 top pad + 26 titleRow height + 8 gap)
-    tabBar.LayoutOrder = 2
-    tabBar.ClipsDescendants = false
-    tabBar.BackgroundTransparency = 1
-    tabBar.ZIndex = 6
-    tabBar.Parent = navbar
+    local tabHolder = Instance.new("Frame")
+    tabHolder.Size = UDim2.fromOffset(280, 32)
+    tabHolder.AnchorPoint = Vector2.new(0, 0.5)
+    tabHolder.Position = UDim2.new(0, 32, 0.5, 0)
+    tabHolder.BackgroundTransparency = 1
+    tabHolder.Parent = tabBarFrame
+
+    local tabLayout = Instance.new("UIListLayout")
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.Padding = UDim.new(0, 6)
+    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    tabLayout.Parent = tabHolder
 
     local tabButtons = {}
     local tabContainers = {}
     local activeTabName = "DASHBOARD"
+    local cardHidden = false
 
-    local TAB_COUNT = 4
-    local TAB_GAP = 6
-    -- Each tab's width as a Scale fraction of tabBar, minus its share of
-    -- the gaps, so 4 tabs + 3 gaps fill tabBar exactly with no layout
-    -- instance needed at all.
-    local TAB_WIDTH_SCALE = 1 / TAB_COUNT
-
-    local function createTabButton(name, label, order)
+    local function createTabButton(name, order)
         local b = Instance.new("TextButton")
-        -- Manual horizontal Position instead of a UIListLayout: this
-        -- whole navbar had a UIListLayout (parented directly to navbar)
-        -- silently fail to position its children on the user's executor
-        -- (title/tabs stayed at their {0,0} default and stacked
-        -- invisibly, though still clickable). To be safe, tab buttons
-        -- are positioned the same explicit way rather than trusting
-        -- another UIListLayout one level down.
-        local index = order - 1
-        b.Size = UDim2.new(TAB_WIDTH_SCALE, -(TAB_GAP * (TAB_COUNT - 1) / TAB_COUNT), 1, 0)
-        b.Position = UDim2.new(TAB_WIDTH_SCALE * index, (TAB_GAP * index) - (TAB_GAP * (TAB_COUNT - 1) / TAB_COUNT) * index, 0, 0)
+        b.Size = UDim2.new(0, 64, 0, 28)
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
-        b.Text = label
+        b.Text = name
         b.TextColor3 = MUTED
         b.TextSize = 8
         b.Font = Enum.Font.GothamBold
-        b.TextScaled = false
-        b.ZIndex = 5
-        b.Parent = tabBar
-        corner(b, 13) -- full pill (half of the 26px tab bar height)
-        uistroke(b, STROKE, 1, 0.5)
-        -- NOTE: no addShadow() here — a row of small side-by-side pills
-        -- doesn't need individual shadows, and addShadow is meant for
-        -- standalone cards, not tightly packed list items.
+        b.Parent = tabHolder
+        corner(b, 14) -- full pill
         tabButtons[name] = b
         return b
     end
 
-    createTabButton("DASHBOARD", "DASHBOARD", 1)
-    createTabButton("TARGETS", "TARGETS", 2)
-    createTabButton("COMBAT", "COMBAT", 3)
-    createTabButton("HOP", "HOP", 4)
+    createTabButton("DASH", 1)
+    createTabButton("TARGET", 2)
+    createTabButton("COMBAT", 3)
+    createTabButton("HOP", 4)
 
-    -- header buttons: collapse / stop (top-right, same row as title)
-    local function headerButton(icon, rightOffset, size)
+    --==================================================
+    -- TAB BAR RIGHT-SIDE BUTTONS: toggle card visibility, close
+    --==================================================
+    local function tabBarButton(icon, xOffsetFromRight, size)
         local b = Instance.new("TextButton")
-        b.Size = UDim2.fromOffset(size or 30, size or 30)
+        b.Size = UDim2.fromOffset(size or 28, size or 28)
         b.AnchorPoint = Vector2.new(1, 0.5)
-        b.Position = UDim2.new(1, -rightOffset, 0.5, 0)
+        b.Position = UDim2.new(1, -xOffsetFromRight, 0.5, 0)
         b.BackgroundColor3 = CARD2
-        b.BackgroundTransparency = 1
+        b.BackgroundTransparency = 0.3
         b.Text = icon
-        b.TextColor3 = MUTED
-        b.TextSize = 14
+        b.TextColor3 = TEXT
+        b.TextSize = 13
         b.Font = Enum.Font.GothamBold
         b.AutoButtonColor = false
-        b.ZIndex = 5
-        b.Parent = titleRow
-        corner(b, 8)
+        b.Parent = tabBarFrame
+        corner(b, 99)
 
         b.MouseButton1Down:Connect(function()
-            tween(b, 0.08, { BackgroundTransparency = 0, BackgroundColor3 = CARD2 })
+            tween(b, 0.08, { BackgroundTransparency = 0 })
         end)
         b.MouseButton1Up:Connect(function()
-            tween(b, 0.12, { BackgroundTransparency = 1 })
+            tween(b, 0.12, { BackgroundTransparency = 0.3 })
         end)
         b.MouseLeave:Connect(function()
-            tween(b, 0.12, { BackgroundTransparency = 1 })
+            tween(b, 0.12, { BackgroundTransparency = 0.3 })
         end)
 
         return b
     end
 
-    -- Positioned manually from the right edge of titleRow instead of via
-    -- LayoutOrder + UIListLayout (same reasoning as titleRow/tabBar above):
-    -- stopBtn (×) sits at the far right, hideBtn (><) just to its left.
-    local stopBtn = headerButton("×", 4, 28)
-    stopBtn.TextSize = 16
-
-    local hideBtn = headerButton("><", 38, 30)
-    hideBtn.TextSize = 11
+    local stopBtn = tabBarButton("×", 12, 28)
+    local hideBtn = tabBarButton("▾", 46, 26) -- toggles just the content card
 
     --==================================================
-    -- CARDS LAYER — everything below the navbar. This is a plain
-    -- transparent container (no background/shadow of its own) that
-    -- holds one or more independent floating cards per tab. Toggling
-    -- cardsLayer.Visible is what "><" does: hides just the cards while
-    -- the navbar (and its tabs) stays put.
+    -- CONTENT CARD — floats separately below the tab bar. Its content
+    -- swaps based on the active tab. Hiding this (via hideBtn) leaves
+    -- the tab bar fully visible above it.
     --==================================================
-    local cardsLayer = Instance.new("Frame")
-    cardsLayer.Name = "CardsLayer"
-    cardsLayer.Size = UDim2.new(1, 0, 0, 0)
-    cardsLayer.AutomaticSize = Enum.AutomaticSize.Y
-    cardsLayer.BackgroundTransparency = 1
-    cardsLayer.ZIndex = 1
-    cardsLayer.LayoutOrder = 2
-    cardsLayer.Parent = root
+    local main = Instance.new("Frame")
+    main.Name = "Main"
+    main.Size = UDim2.fromOffset(390, 210)
+    main.AnchorPoint = Vector2.new(ANCHOR_X, 0)
+    main.Position = UDim2.new(ANCHOR_X, 0, ANCHOR_Y_CARD, 0)
+    main.BackgroundColor3 = BG
+    main.BorderSizePixel = 0
+    main.ClipsDescendants = false
+    main.Parent = gui
+    corner(main, 22)
+    addShadow(main, 0.5)
+    uistroke(main, STROKE, 1, 0.2)
+    gradient(main, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
-    local cardsLayerLayout = Instance.new("UIListLayout")
-    cardsLayerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    cardsLayerLayout.Parent = cardsLayer
-
+    --==================================================
+    -- TAB CONTENT AREA (all tabs share this same rectangle inside
+    -- the content card, only the active one is Visible)
+    --==================================================
+    local tabContentY = 16
+    local tabContentHeight = 178
 
     local function newTabContainer(name)
         local c = Instance.new("Frame")
-        c.Name = name .. "Tab"
-        c.Size = UDim2.new(1, 0, 0, 0)
-        c.AutomaticSize = Enum.AutomaticSize.Y
+        c.Size = UDim2.new(1, -28, 0, tabContentHeight)
+        c.Position = UDim2.fromOffset(14, tabContentY)
         c.BackgroundTransparency = 1
         c.Visible = (name == "DASHBOARD")
-        c.LayoutOrder = 1
-        c.Parent = cardsLayer
+        c.Parent = main
         tabContainers[name] = c
-
-        local layout = Instance.new("UIListLayout")
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Padding = UDim.new(0, 10) -- visible gap between floating cards
-        layout.Parent = c
-
         return c
     end
 
@@ -417,112 +283,24 @@ local function createNewLayoutUI()
             end
         end
     end
+
     --==================================================
     -- TAB: DASHBOARD — target info card (status/nama/level/jarak/bounty)
     --==================================================
     local dashTab = newTabContainer("DASHBOARD")
 
-    -- Two-column row: left = master status summary card, right = live
-    -- target info card. Matches the reference layout's side-by-side
-    -- card pattern instead of one narrow card stacked above the log.
-    local dashRow = Instance.new("Frame")
-    dashRow.Name = "DashRow"
-    dashRow.Size = UDim2.new(1, 0, 0, 128)
-    dashRow.BackgroundTransparency = 1
-    dashRow.LayoutOrder = 1
-    dashRow.Parent = dashTab
-
-    local dashRowLayout = Instance.new("UIListLayout")
-    dashRowLayout.FillDirection = Enum.FillDirection.Horizontal
-    dashRowLayout.Padding = UDim.new(0, 10)
-    dashRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    dashRowLayout.Parent = dashRow
-
-    --------------------------------------------------
-    -- Left card: MASTER STATUS (mirrors state.isHunting)
-    --------------------------------------------------
-    local statusCard = Instance.new("Frame")
-    statusCard.Name = "StatusCard"
-    statusCard.Size = UDim2.new(0.5, -5, 1, 0)
-    statusCard.LayoutOrder = 1
-    statusCard.BackgroundColor3 = CARD
-    statusCard.BorderSizePixel = 0
-    statusCard.Parent = dashRow
-    corner(statusCard, 20)
-
-    uistroke(statusCard, STROKE, 1, 0.5)
-
-    local statusCardTitle = Instance.new("TextLabel")
-    statusCardTitle.Size = UDim2.new(1, -22, 0, 18)
-    statusCardTitle.Position = UDim2.fromOffset(11, 10)
-    statusCardTitle.BackgroundTransparency = 1
-    statusCardTitle.Text = "MASTER AUTO BOUNTY"
-    statusCardTitle.TextColor3 = MUTED
-    statusCardTitle.TextSize = 9
-    statusCardTitle.Font = Enum.Font.GothamBold
-    statusCardTitle.TextXAlignment = Enum.TextXAlignment.Left
-    statusCardTitle.Parent = statusCard
-
-    -- live ON/OFF pill, mirrors state.isHunting
-    local masterPill = Instance.new("Frame")
-    masterPill.Size = UDim2.fromOffset(40, 18)
-    masterPill.AnchorPoint = Vector2.new(1, 0)
-    masterPill.Position = UDim2.new(1, -11, 0, 9)
-    masterPill.BackgroundColor3 = MUTED
-    masterPill.Parent = statusCard
-    corner(masterPill, 99)
-
-    local masterPillLabel = Instance.new("TextLabel")
-    masterPillLabel.Size = UDim2.fromScale(1, 1)
-    masterPillLabel.BackgroundTransparency = 1
-    masterPillLabel.Text = "OFF"
-    masterPillLabel.TextColor3 = ACCENT_TEXT
-    masterPillLabel.TextSize = 9
-    masterPillLabel.Font = Enum.Font.GothamBold
-    masterPillLabel.Parent = masterPill
-
-    local function statusLine(labelText, y)
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -22, 0, 16)
-        row.Position = UDim2.fromOffset(11, y)
-        row.BackgroundTransparency = 1
-        row.Parent = statusCard
-
-        local val = Instance.new("TextLabel")
-        val.Size = UDim2.new(1, 0, 1, 0)
-        val.BackgroundTransparency = 1
-        val.Text = labelText
-        val.TextColor3 = TEXT
-        val.TextSize = 9
-        val.Font = Enum.Font.Gotham
-        val.TextXAlignment = Enum.TextXAlignment.Left
-        val.TextTruncate = Enum.TextTruncate.AtEnd
-        val.Parent = row
-        return val
-    end
-
-    local masterStatusLine = statusLine("Status: Idle", 36)
-    local masterRegionLine = statusLine("Kecepatan: " .. tostring(_G.CustomFlightSpeed), 56)
-    local masterFilterLine = statusLine("Server Hop: siap", 76)
-    local masterExtraLine = statusLine("Target aktif: -", 96)
-
-    --------------------------------------------------
-    -- Right card: TARGET INFO (existing live-bound fields, unchanged
-    -- logic — only resized to sit side-by-side instead of full width)
-    --------------------------------------------------
     local info = Instance.new("Frame")
-    info.Size = UDim2.new(0.5, -5, 1, 0)
-    info.LayoutOrder = 2
+    info.Size = UDim2.new(1, 0, 1, 0)
     info.BackgroundColor3 = CARD
     info.BorderSizePixel = 0
-    info.Parent = dashRow
-    corner(info, 20)
-
+    info.Parent = dashTab
+    corner(info, 18)
+    addShadow(info, 0.6)
     uistroke(info, STROKE, 1, 0.5)
 
     local infoTitle = Instance.new("TextLabel")
-    infoTitle.Size = UDim2.new(0.5, -20, 0, 18)
-    infoTitle.Position = UDim2.fromOffset(11, 8)
+    infoTitle.Size = UDim2.new(1, -20, 0, 18)
+    infoTitle.Position = UDim2.fromOffset(14, 10)
     infoTitle.BackgroundTransparency = 1
     infoTitle.Text = "TARGET INFO"
     infoTitle.TextColor3 = MUTED
@@ -531,42 +309,12 @@ local function createNewLayoutUI()
     infoTitle.TextXAlignment = Enum.TextXAlignment.Left
     infoTitle.Parent = info
 
-    -- Status badge (read-only: reflects state.isHunting, not clickable)
-    local statusBadge = Instance.new("Frame")
-    statusBadge.Size = UDim2.fromOffset(70, 16)
-    statusBadge.AnchorPoint = Vector2.new(1, 0)
-    statusBadge.Position = UDim2.new(1, -11, 0, 8)
-    statusBadge.BackgroundColor3 = CARD2
-    statusBadge.Parent = info
-    corner(statusBadge, 8)
-    uistroke(statusBadge, STROKE, 1, 0.4)
-
-    local statusDot = Instance.new("Frame")
-    statusDot.Size = UDim2.fromOffset(6, 6)
-    statusDot.AnchorPoint = Vector2.new(0, 0.5)
-    statusDot.Position = UDim2.new(0, 7, 0.5, 0)
-    statusDot.BackgroundColor3 = MUTED
-    statusDot.BorderSizePixel = 0
-    statusDot.Parent = statusBadge
-    corner(statusDot, 99)
-
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, -17, 1, 0)
-    statusLabel.Position = UDim2.fromOffset(17, 0)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "IDLE"
-    statusLabel.TextColor3 = TEXT
-    statusLabel.TextSize = 8
-    statusLabel.Font = Enum.Font.GothamBold
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = statusBadge
-
     local infoValues = {}
 
     local function infoRow(name, value, y)
         local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -22, 0, 17)
-        row.Position = UDim2.fromOffset(11, y)
+        row.Size = UDim2.new(1, -28, 0, 19)
+        row.Position = UDim2.fromOffset(14, y)
         row.BackgroundTransparency = 1
         row.Parent = info
 
@@ -595,22 +343,22 @@ local function createNewLayoutUI()
         return b
     end
 
-    infoRow("STATUS", "Idle / Mencari...", 30)
-    infoRow("NAMA", "-", 49)
-    infoRow("LEVEL", "-", 68)
-    infoRow("JARAK", "-", 87)
+    infoRow("STATUS", "Idle / Mencari...", 34)
+    infoRow("NAMA", "-", 55)
+    infoRow("LEVEL", "-", 76)
+    infoRow("JARAK", "-", 97)
 
     local miniDivider = Instance.new("Frame")
-    miniDivider.Size = UDim2.new(1, -22, 0, 1)
-    miniDivider.Position = UDim2.fromOffset(11, 82)
+    miniDivider.Size = UDim2.new(1, -28, 0, 1)
+    miniDivider.Position = UDim2.fromOffset(14, 122)
     miniDivider.BackgroundColor3 = STROKE
     miniDivider.BackgroundTransparency = 0.4
     miniDivider.BorderSizePixel = 0
     miniDivider.Parent = info
 
     local bountyRow = Instance.new("Frame")
-    bountyRow.Size = UDim2.new(1, -22, 0, 22)
-    bountyRow.Position = UDim2.fromOffset(11, 86)
+    bountyRow.Size = UDim2.new(1, -28, 0, 26)
+    bountyRow.Position = UDim2.fromOffset(14, 128)
     bountyRow.BackgroundTransparency = 1
     bountyRow.Parent = info
 
@@ -630,7 +378,7 @@ local function createNewLayoutUI()
     bountyValue.BackgroundTransparency = 1
     bountyValue.Text = "◈ -"
     bountyValue.TextColor3 = ACCENT
-    bountyValue.TextSize = 11
+    bountyValue.TextSize = 12
     bountyValue.Font = Enum.Font.GothamBold
     bountyValue.TextXAlignment = Enum.TextXAlignment.Right
     bountyValue.Parent = bountyRow
@@ -644,17 +392,17 @@ local function createNewLayoutUI()
     local targetsTab = newTabContainer("TARGETS")
 
     local logFrame = Instance.new("Frame")
-    logFrame.Size = UDim2.new(1, 0, 0, 200)
+    logFrame.Size = UDim2.new(1, 0, 1, 0)
     logFrame.BackgroundColor3 = CARD
     logFrame.BorderSizePixel = 0
     logFrame.Parent = targetsTab
-    corner(logFrame, 20)
-
+    corner(logFrame, 18)
+    addShadow(logFrame, 0.6)
     uistroke(logFrame, STROKE, 1, 0.5)
 
     local logTitle = Instance.new("TextLabel")
     logTitle.Size = UDim2.new(1, -20, 0, 16)
-    logTitle.Position = UDim2.fromOffset(11, 6)
+    logTitle.Position = UDim2.fromOffset(14, 10)
     logTitle.BackgroundTransparency = 1
     logTitle.Text = "RIWAYAT TARGET (SESI INI)"
     logTitle.TextColor3 = MUTED
@@ -664,8 +412,8 @@ local function createNewLayoutUI()
     logTitle.Parent = logFrame
 
     local logScroll = Instance.new("ScrollingFrame")
-    logScroll.Size = UDim2.new(1, -14, 1, -28)
-    logScroll.Position = UDim2.fromOffset(7, 24)
+    logScroll.Size = UDim2.new(1, -28, 1, -40)
+    logScroll.Position = UDim2.fromOffset(14, 30)
     logScroll.BackgroundTransparency = 1
     logScroll.BorderSizePixel = 0
     logScroll.ScrollBarThickness = 3
@@ -697,7 +445,6 @@ local function createNewLayoutUI()
         row.TextTruncate = Enum.TextTruncate.AtEnd
         row.Parent = logScroll
 
-        -- trim oldest entries beyond the cap
         local children = logScroll:GetChildren()
         local entries = {}
         for _, child in ipairs(children) do
@@ -719,17 +466,17 @@ local function createNewLayoutUI()
     local combatTab = newTabContainer("COMBAT")
 
     local combatCard = Instance.new("Frame")
-    combatCard.Size = UDim2.new(1, 0, 0, 118)
+    combatCard.Size = UDim2.new(1, 0, 1, 0)
     combatCard.BackgroundColor3 = CARD
     combatCard.BorderSizePixel = 0
     combatCard.Parent = combatTab
-    corner(combatCard, 20)
-
+    corner(combatCard, 18)
+    addShadow(combatCard, 0.6)
     uistroke(combatCard, STROKE, 1, 0.5)
 
     local combatTitle = Instance.new("TextLabel")
     combatTitle.Size = UDim2.new(1, -20, 0, 16)
-    combatTitle.Position = UDim2.fromOffset(11, 8)
+    combatTitle.Position = UDim2.fromOffset(14, 10)
     combatTitle.BackgroundTransparency = 1
     combatTitle.Text = "PENGATURAN COMBAT"
     combatTitle.TextColor3 = MUTED
@@ -739,8 +486,8 @@ local function createNewLayoutUI()
     combatTitle.Parent = combatCard
 
     local speedRow = Instance.new("Frame")
-    speedRow.Size = UDim2.new(1, -22, 0, 34)
-    speedRow.Position = UDim2.fromOffset(11, 30)
+    speedRow.Size = UDim2.new(1, -28, 0, 34)
+    speedRow.Position = UDim2.fromOffset(14, 34)
     speedRow.BackgroundTransparency = 1
     speedRow.Parent = combatCard
 
@@ -852,13 +599,13 @@ local function createNewLayoutUI()
 
     -- SKIP TARGET button lives in the Combat tab too (it's a combat action)
     local skipBtn = Instance.new("TextButton")
-    skipBtn.Size = UDim2.new(1, -22, 0, 32)
-    skipBtn.Position = UDim2.fromOffset(11, 76)
+    skipBtn.Size = UDim2.new(1, -28, 0, 36)
+    skipBtn.Position = UDim2.fromOffset(14, 86)
     skipBtn.BackgroundColor3 = CARD2
     skipBtn.AutoButtonColor = false
     skipBtn.Text = ""
     skipBtn.Parent = combatCard
-    corner(skipBtn, 8)
+    corner(skipBtn, 16)
     uistroke(skipBtn, STROKE, 1, 0.4)
 
     local skipLabel = Instance.new("TextLabel")
@@ -879,13 +626,13 @@ local function createNewLayoutUI()
     local hopTab = newTabContainer("HOP")
 
     local hopBtn = Instance.new("TextButton")
-    hopBtn.Size = UDim2.new(1, 0, 0, 90)
+    hopBtn.Size = UDim2.new(1, 0, 1, 0)
     hopBtn.BackgroundColor3 = CARD
     hopBtn.AutoButtonColor = false
     hopBtn.Text = ""
     hopBtn.Parent = hopTab
-    corner(hopBtn, 20)
-
+    corner(hopBtn, 18)
+    addShadow(hopBtn, 0.6)
     uistroke(hopBtn, STROKE, 1, 0.5)
 
     local hopDot = Instance.new("Frame")
@@ -919,6 +666,18 @@ local function createNewLayoutUI()
         end)
     end
     setActiveTab("DASHBOARD")
+
+    --==================================================
+    -- TOGGLE CARD (hideBtn on the tab bar): hides ONLY the content
+    -- card, tab bar stays visible and clickable the whole time.
+    --==================================================
+    local function toggleCard()
+        cardHidden = not cardHidden
+        main.Visible = not cardHidden
+        hideBtn.Text = cardHidden and "▸" or "▾"
+    end
+    hideBtn.MouseButton1Click:Connect(toggleCard)
+
 
     --==================================================
     -- CIRCULAR "ZD" LOGO (always visible from the start, floating
@@ -1023,44 +782,19 @@ local function createNewLayoutUI()
         end)
     end
 
-    -- "><" in the navbar collapses just the cards underneath it — the
-    -- navbar (title + tabs) stays fully visible and usable. This is
-    -- different from tapping the logo, which hides everything (see below).
-    local cardsCollapsed = false
+    -- Logo toggles EVERYTHING (both the tab bar and the content card).
+    -- The tab bar's own hideBtn (▾/▸) only ever toggles the content
+    -- card by itself — that's the "just hide the card" behavior from
+    -- the tab bar; the logo is the "hide absolutely everything" switch.
+    local everythingHidden = false
 
-    local function toggleCardsLayer()
-        cardsCollapsed = not cardsCollapsed
-        cardsLayer.Visible = not cardsCollapsed
+    local function toggleEverything()
+        everythingHidden = not everythingHidden
+        tabBarFrame.Visible = not everythingHidden
+        main.Visible = not everythingHidden and not cardHidden
     end
 
-    hideBtn.MouseButton1Click:Connect(toggleCardsLayer)
-
-    -- Logo tap hides the WHOLE dashboard (navbar + cards) down to just
-    -- the logo itself. Nothing about the script stops running either way —
-    -- root is only ever Visible=false, never Destroy()'d.
-    local dashboardHidden = false
-
-    local function hideEverything()
-        state.uiHidden = true
-        dashboardHidden = true
-        root.Visible = false
-    end
-
-    local function showEverything()
-        state.uiHidden = false
-        dashboardHidden = false
-        root.Visible = true
-    end
-
-    local function toggleDashboard()
-        if dashboardHidden then
-            showEverything()
-        else
-            hideEverything()
-        end
-    end
-
-    -- ---- logo drag (independent of the dashboard; tap still opens it) ----
+    -- ---- logo drag (independent of main window; tap still opens it) ----
     local logoDragging = false
     local logoDragStart
     local logoStartPos
@@ -1107,10 +841,10 @@ local function createNewLayoutUI()
 
     logo.MouseButton1Click:Connect(function()
         if logoMoved then
-            return -- was a drag, not a tap; don't toggle the dashboard
+            return -- was a drag, not a tap; don't toggle visibility
         end
         playLogoBurst()
-        toggleDashboard()
+        toggleEverything()
     end)
 
     -- keep the logo's status dot live at all times, collapsed or not
@@ -1229,51 +963,11 @@ local function createNewLayoutUI()
     yesBtn.MouseButton1Click:Connect(function()
         state.stopRequested = true -- auto.lua polls this to kill its own loops/connections
         closeConfirm()
-        tween(root, 0.14, { Size = UDim2.fromOffset(6, 6) })
+        tween(main, 0.14, { Size = UDim2.fromOffset(6, 6) })
         tween(logo, 0.14, { Size = UDim2.fromOffset(6, 6) })
         task.delay(0.14, function()
             gui:Destroy()
         end)
-    end)
-
-    --==================================================
-    -- DRAG (drag the navbar to move the whole dashboard —
-    -- root moves as one unit, cards follow automatically since
-    -- they're positioned relative to root)
-    --==================================================
-    local dragging = false
-    local dragStart
-    local startPos
-
-    navbar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = root.Position
-        end
-    end)
-
-    navbar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging then
-            if input.UserInputType == Enum.UserInputType.Touch
-            or input.UserInputType == Enum.UserInputType.MouseMovement then
-                local delta = input.Position - dragStart
-                root.Position = UDim2.new(
-                    startPos.X.Scale,
-                    startPos.X.Offset + delta.X,
-                    startPos.Y.Scale,
-                    startPos.Y.Offset + delta.Y
-                )
-            end
-        end
     end)
 
     --==================================================
@@ -1377,35 +1071,13 @@ local function createNewLayoutUI()
             t = t + 0.3
             if state.isHunting then
                 if state.currentTargetPlayer then
-                    statusLabel.Text = "HUNTING"
-                    statusDot.BackgroundColor3 = RED
+                    tabBarStatusDot.BackgroundColor3 = RED
                 else
-                    statusLabel.Text = "SCANNING"
-                    statusDot.BackgroundColor3 = GREEN
+                    tabBarStatusDot.BackgroundColor3 = GREEN
                 end
             else
-                statusLabel.Text = "IDLE"
-                statusDot.BackgroundColor3 = MUTED
+                tabBarStatusDot.BackgroundColor3 = MUTED
             end
-
-            -- mirror the same state into the left-hand MASTER AUTO
-            -- BOUNTY summary card (ON/OFF pill + status lines)
-            if state.isHunting then
-                masterPillLabel.Text = "ON"
-                tween(masterPill, 0.15, { BackgroundColor3 = GREEN })
-                masterStatusLine.Text = state.currentTargetPlayer
-                    and ("Status: Menyerang " .. state.currentTargetPlayer.Name)
-                    or "Status: Mencari target..."
-                masterExtraLine.Text = state.currentTargetPlayer
-                    and ("Target aktif: " .. state.currentTargetPlayer.Name)
-                    or "Target aktif: -"
-            else
-                masterPillLabel.Text = "OFF"
-                tween(masterPill, 0.15, { BackgroundColor3 = MUTED })
-                masterStatusLine.Text = "Status: Idle"
-                masterExtraLine.Text = "Target aktif: -"
-            end
-            masterRegionLine.Text = "Kecepatan: " .. tostring(_G.CustomFlightSpeed)
         end
     end)
 
@@ -1453,7 +1125,6 @@ local function createNewLayoutUI()
     UIRefs.infoValues = infoValues
     UIRefs.addTargetLogEntry = addTargetLogEntry
 end
-
 
 --==================================================
 -- HUD UPDATE (fills TARGET INFO card fields live)
