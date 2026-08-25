@@ -60,22 +60,29 @@ local function gradient(obj, c1, c2, rotation)
     return g
 end
 
--- Adds a soft drop-shadow behind `obj` using a pre-blurred rounded-rect
--- image (cheap: one ImageLabel, no runtime blur calculation). Makes cards
--- read as "floating" above the background instead of flat/flush with it.
+-- Shadow template: built ONCE per UI instance and reused via :Clone() for
+-- every card. Building a fresh ImageLabel from scratch per-card (old code)
+-- means Roblox has to set ~10 properties x N cards; cloning a pre-built
+-- template only touches the 2 properties that actually differ per card
+-- (ImageTransparency, parent), which is noticeably cheaper on low-end
+-- phones since it avoids redundant property-changed/replication churn.
+local shadowTemplate = Instance.new("ImageLabel")
+shadowTemplate.Name = "Shadow"
+shadowTemplate.BackgroundTransparency = 1
+shadowTemplate.Image = "rbxassetid://5028857084" -- soft rounded shadow, public Roblox asset
+shadowTemplate.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadowTemplate.ImageTransparency = 0.55
+shadowTemplate.ScaleType = Enum.ScaleType.Slice
+shadowTemplate.SliceCenter = Rect.new(24, 24, 276, 276)
+shadowTemplate.Size = UDim2.new(1, 18, 1, 18)
+shadowTemplate.AnchorPoint = Vector2.new(0.5, 0.5)
+shadowTemplate.Position = UDim2.new(0.5, 0, 0.5, 4)
+shadowTemplate.ZIndex = -1 -- always render behind everything in its parent
+
+-- Adds a soft drop-shadow behind `obj` by cloning the shared template above.
 local function addShadow(obj, intensity)
-    local shadow = Instance.new("ImageLabel")
-    shadow.Name = "Shadow"
-    shadow.BackgroundTransparency = 1
-    shadow.Image = "rbxassetid://5028857084" -- soft rounded shadow, public Roblox asset
-    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    local shadow = shadowTemplate:Clone()
     shadow.ImageTransparency = intensity or 0.55
-    shadow.ScaleType = Enum.ScaleType.Slice
-    shadow.SliceCenter = Rect.new(24, 24, 276, 276)
-    shadow.Size = UDim2.new(1, 18, 1, 18)
-    shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-    shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
-    shadow.ZIndex = -1 -- always render behind everything in its parent
     -- IMPORTANT: parent to `obj` itself (not obj.Parent). The Size above
     -- is Scale-relative to whatever this is parented to — parenting to
     -- obj.Parent made a 100%+18px shadow relative to the WHOLE SCREEN
@@ -1213,40 +1220,48 @@ local function createNewLayoutUI()
     end)
 
     --==================================================
-    -- LIVE DISTANCE UPDATE (JARAK field refreshes continuously while
-    -- a target is active, instead of only once when the target was
-    -- first found — distance changes as both players move, so this
-    -- needs its own fast loop separate from updateHUDDisplay).
+    -- LIVE DISTANCE UPDATE (JARAK field refreshes periodically while
+    -- a target is active). Tuned down from a tight 0.2s loop to reduce
+    -- lag on low-end phones:
+    --   - JARAK_UPDATE_INTERVAL: how often we refresh while a target
+    --     exists (default 5s — change this one number to adjust).
+    --   - IDLE_POLL_INTERVAL: much slower poll while there's no target,
+    --     so the thread isn't busy-waiting 5x/sec for nothing to do.
+    --   - Only writes .Text when the displayed value actually changed,
+    --     since setting .Text is what triggers a UI re-render/layout
+    --     pass — writing the same string every tick was pure waste.
+    --   - Removed the per-tick debug prints (string concat + print on
+    --     every loop is real overhead on weaker devices).
     --==================================================
+    local JARAK_UPDATE_INTERVAL = 5
+    local IDLE_POLL_INTERVAL = 1
+    local lastJarakText = nil
+
     task.spawn(function()
         while gui.Parent do
-            task.wait(0.2)
-
-            if not infoValues["JARAK"] then
-                -- infoValues["JARAK"] missing entirely; shouldn't happen but log once if so
-            elseif not state.currentTargetPlayer then
-                -- no active target right now, nothing to update
-            elseif not state.currentTargetPlayer.Parent then
-                print("[JARAK DEBUG] state.currentTargetPlayer.Parent is nil (target left?), skipping update")
+            if not state.currentTargetPlayer then
+                lastJarakText = nil
+                task.wait(IDLE_POLL_INTERVAL)
             else
-                local ok, err = pcall(function()
-                    local LocalPlayer = game:GetService("Players").LocalPlayer
-                    local myChar = LocalPlayer.Character
-                    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                    local targetChar = state.currentTargetPlayer.Character
-                    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                task.wait(JARAK_UPDATE_INTERVAL)
 
-                    if not myRoot then
-                        print("[JARAK DEBUG] myRoot nil (LocalPlayer character/HRP missing)")
-                    elseif not targetRoot then
-                        print("[JARAK DEBUG] targetRoot nil (target character/HRP missing)")
-                    else
-                        local d = (myRoot.Position - targetRoot.Position).Magnitude
-                        infoValues["JARAK"].Text = tostring(math.floor(d)) .. " studs"
-                    end
-                end)
-                if not ok then
-                    print("[JARAK DEBUG] pcall error:", err)
+                if infoValues["JARAK"] and state.currentTargetPlayer and state.currentTargetPlayer.Parent then
+                    pcall(function()
+                        local LocalPlayer = game:GetService("Players").LocalPlayer
+                        local myChar = LocalPlayer.Character
+                        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                        local targetChar = state.currentTargetPlayer.Character
+                        local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+
+                        if myRoot and targetRoot then
+                            local d = (myRoot.Position - targetRoot.Position).Magnitude
+                            local newText = tostring(math.floor(d)) .. " studs"
+                            if newText ~= lastJarakText then
+                                infoValues["JARAK"].Text = newText
+                                lastJarakText = newText
+                            end
+                        end
+                    end)
                 end
             end
         end
