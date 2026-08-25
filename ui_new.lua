@@ -108,22 +108,29 @@ local function createUI()
     gui.Parent = SafeUIParent
 
     --==================================================
-    -- ROOT — invisible anchor everything positions relative to.
-    -- Width clamps to a sane pixel range across phone/tablet/PC.
+    -- NAVBAR HOLDER — positioned independently near the top of the
+    -- screen. Kept as its own frame (not a child of the content root)
+    -- so the tab bar and the cards below no longer move as one single
+    -- glued block — each has its own anchor now.
+    --==================================================
+    local navbarHolder = Instance.new("Frame")
+    navbarHolder.Name = "NavbarHolder"
+    navbarHolder.AnchorPoint = Vector2.new(0.5, 0)
+    navbarHolder.Position = UDim2.new(0.5, 0, 0, 70)
+    navbarHolder.Size = UDim2.new(0.52, 0, 0.09, 0)
+    navbarHolder.BackgroundTransparency = 1
+    navbarHolder.Parent = gui
+
+    --==================================================
+    -- ROOT (content) — the card area. Centered on its own in the
+    -- middle of the screen instead of being pinned directly under the
+    -- navbar, so there's a real gap between tabs and cards.
     --==================================================
     local root = Instance.new("Frame")
     root.Name = "Root"
-    root.AnchorPoint = Vector2.new(0.5, 0)
-    root.Position = UDim2.new(0.5, 0, 0, 70)
-    -- Scale-based (percentage of screen), not fixed pixels, so the
-    -- whole dashboard shrinks/grows with the actual device screen
-    -- instead of being oversized on phones. Height is clamped so it
-    -- never exceeds roughly 40% of the screen — everything fits in
-    -- one glance without scrolling.
-    -- Width narrowed from 0.6 -> 0.52 so both edges clear the game's
-    -- own top-left (menu/chat) and top-right icons, and the top offset
-    -- bumped from 8 -> 70 so the navbar sits below that icon row too.
-    root.Size = UDim2.new(0.52, 0, 0.58, 0)
+    root.AnchorPoint = Vector2.new(0.5, 0.5)
+    root.Position = UDim2.new(0.5, 0, 0.56, 0)
+    root.Size = UDim2.new(0.52, 0, 0.5, 0)
     root.BackgroundTransparency = 1
     root.Parent = gui
 
@@ -135,12 +142,12 @@ local function createUI()
     --==================================================
     local navbar = Instance.new("Frame")
     navbar.Name = "Navbar"
-    navbar.Size = UDim2.new(1, 0, 0.16, 0) -- slightly shorter proportionally since root itself is now taller overall
+    navbar.Size = UDim2.new(1, 0, 1, 0)
     navbar.Position = UDim2.new(0, 0, 0, 0)
     navbar.BackgroundColor3 = BG_CARD
     navbar.BorderSizePixel = 0
     navbar.ZIndex = 10
-    navbar.Parent = root
+    navbar.Parent = navbarHolder
     corner(navbar, 16)
     uistroke(navbar, STROKE, 1, 0.15)
 
@@ -199,8 +206,8 @@ local function createUI()
     --==================================================
     local contentLayer = Instance.new("Frame")
     contentLayer.Name = "ContentLayer"
-    contentLayer.Position = UDim2.new(0, 0, 0.16, 6) -- right after the navbar's 0.16 scale height + small gap
-    contentLayer.Size = UDim2.new(1, 0, 0.84, -6)
+    contentLayer.Position = UDim2.new(0, 0, 0, 0)
+    contentLayer.Size = UDim2.new(1, 0, 1, 0)
     contentLayer.BackgroundTransparency = 1
     contentLayer.Parent = root
 
@@ -411,6 +418,7 @@ local function createUI()
     UIRefs.setActiveTab = setActiveTab
     UIRefs.gui = gui
     UIRefs.root = root
+    UIRefs.navbarHolder = navbarHolder
 end
 
 return {
