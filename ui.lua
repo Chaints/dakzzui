@@ -259,10 +259,13 @@ local function createNewLayoutUI()
     title.Parent = titleRow
 
     --==================================================
-    -- TAB BAR — full-width second row under the title. Uses a
-    -- UIGridLayout with a computed cell size (see below) so the four
-    -- tabs always fit the available width instead of overflowing on
-    -- narrow phone screens.
+    -- TAB BAR — full-width second row under the title. Switched from
+    -- UIGridLayout to a horizontal UIListLayout: GridLayout wasn't
+    -- rendering the tab buttons at all on some executors (buttons
+    -- ended up with no visible size/position), while ListLayout is a
+    -- much more basic/universally-supported layout instance. Each
+    -- button still gets an explicit Scale-based Size below so it has
+    -- a real size on its own even before the list layout arranges it.
     --==================================================
     local tabBar = Instance.new("Frame")
     tabBar.Name = "TabRow"
@@ -273,14 +276,13 @@ local function createNewLayoutUI()
     tabBar.ZIndex = 6
     tabBar.Parent = navbar
 
-
-    local tabGrid = Instance.new("UIGridLayout")
-    tabGrid.FillDirection = Enum.FillDirection.Horizontal
-    tabGrid.FillDirectionMaxCells = 4
-    tabGrid.CellPadding = UDim2.fromOffset(6, 0)
-    tabGrid.CellSize = UDim2.new(0.25, -5, 1, 0) -- 4 equal columns, shrinks with tabBar
-    tabGrid.SortOrder = Enum.SortOrder.LayoutOrder
-    tabGrid.Parent = tabBar
+    local tabList = Instance.new("UIListLayout")
+    tabList.FillDirection = Enum.FillDirection.Horizontal
+    tabList.VerticalAlignment = Enum.VerticalAlignment.Center
+    tabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    tabList.Padding = UDim.new(0, 6)
+    tabList.SortOrder = Enum.SortOrder.LayoutOrder
+    tabList.Parent = tabBar
 
     local tabButtons = {}
     local tabContainers = {}
@@ -288,7 +290,12 @@ local function createNewLayoutUI()
 
     local function createTabButton(name, label, order)
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.25, -5, 1, 0) -- explicit starting size; UIGridLayout overrides this via CellSize, but some executors fail to apply CellSize to a child that starts at {0,0},{0,0}
+        -- ~23.5% width each (4 tabs + 3 gaps of 6px fit in tabBar's
+        -- width) via Scale, minus a small offset so 4 fit with padding.
+        -- Scale-based sizing means the button has a real, non-zero size
+        -- immediately on creation, independent of whether the list
+        -- layout instance itself is fully supported by the executor.
+        b.Size = UDim2.new(0.235, 0, 1, 0)
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
