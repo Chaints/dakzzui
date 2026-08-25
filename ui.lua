@@ -60,6 +60,26 @@ local function gradient(obj, c1, c2, rotation)
     return g
 end
 
+-- Adds a soft drop-shadow behind `obj` using a pre-blurred rounded-rect
+-- image (cheap: one ImageLabel, no runtime blur calculation). Makes cards
+-- read as "floating" above the background instead of flat/flush with it.
+local function addShadow(obj, intensity)
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://5028857084" -- soft rounded shadow, public Roblox asset
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = intensity or 0.55
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(24, 24, 276, 276)
+    shadow.Size = UDim2.new(1, 18, 1, 18)
+    shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
+    shadow.ZIndex = (obj.ZIndex or 1) - 1
+    shadow.Parent = obj.Parent
+    return shadow
+end
+
 local function tween(obj, duration, props, style, direction)
     local info = TweenInfo.new(
         duration or 0.12,
@@ -109,7 +129,8 @@ local function createNewLayoutUI()
     main.BorderSizePixel = 0
     main.ClipsDescendants = false
     main.Parent = gui
-    corner(main, 14)
+    corner(main, 22)
+    addShadow(main, 0.5)
     uistroke(main, STROKE, 1, 0.2)
     gradient(main, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
@@ -245,7 +266,7 @@ local function createNewLayoutUI()
 
     local tabLayout = Instance.new("UIListLayout")
     tabLayout.FillDirection = Enum.FillDirection.Horizontal
-    tabLayout.Padding = UDim.new(0, 6)
+    tabLayout.Padding = UDim.new(0, 8)
     tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tabLayout.Parent = tabBar
 
@@ -264,8 +285,9 @@ local function createNewLayoutUI()
         b.TextSize = 9
         b.Font = Enum.Font.GothamBold
         b.Parent = tabBar
-        corner(b, 7)
+        corner(b, 13) -- full pill (half of the 26px tab bar height)
         uistroke(b, STROKE, 1, 0.5)
+        addShadow(b, 0.7)
         tabButtons[name] = b
         return b
     end
@@ -320,7 +342,8 @@ local function createNewLayoutUI()
     info.BackgroundColor3 = CARD
     info.BorderSizePixel = 0
     info.Parent = dashTab
-    corner(info, 10)
+    corner(info, 20)
+    addShadow(info, 0.55)
     uistroke(info, STROKE, 1, 0.5)
 
     local infoTitle = Instance.new("TextLabel")
@@ -421,7 +444,8 @@ local function createNewLayoutUI()
     logFrame.BackgroundColor3 = CARD
     logFrame.BorderSizePixel = 0
     logFrame.Parent = targetsTab
-    corner(logFrame, 10)
+    corner(logFrame, 20)
+    addShadow(logFrame, 0.55)
     uistroke(logFrame, STROKE, 1, 0.5)
 
     local logTitle = Instance.new("TextLabel")
@@ -495,7 +519,8 @@ local function createNewLayoutUI()
     combatCard.BackgroundColor3 = CARD
     combatCard.BorderSizePixel = 0
     combatCard.Parent = combatTab
-    corner(combatCard, 10)
+    corner(combatCard, 20)
+    addShadow(combatCard, 0.55)
     uistroke(combatCard, STROKE, 1, 0.5)
 
     local combatTitle = Instance.new("TextLabel")
@@ -655,7 +680,8 @@ local function createNewLayoutUI()
     hopBtn.AutoButtonColor = false
     hopBtn.Text = ""
     hopBtn.Parent = hopTab
-    corner(hopBtn, 10)
+    corner(hopBtn, 20)
+    addShadow(hopBtn, 0.55)
     uistroke(hopBtn, STROKE, 1, 0.5)
 
     local hopDot = Instance.new("Frame")
