@@ -103,7 +103,7 @@ local function createUI()
     local gui = Instance.new("ScreenGui")
     gui.Name = UI_NAME
     gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
+    gui.IgnoreGuiInset = false -- respect Roblox's topbar inset so we don't cover the menu/chat buttons
     gui.DisplayOrder = 999
     gui.Parent = SafeUIParent
 
@@ -114,13 +114,16 @@ local function createUI()
     local root = Instance.new("Frame")
     root.Name = "Root"
     root.AnchorPoint = Vector2.new(0.5, 0)
-    root.Position = UDim2.new(0.5, 0, 0, 8)
+    root.Position = UDim2.new(0.5, 0, 0, 70)
     -- Scale-based (percentage of screen), not fixed pixels, so the
     -- whole dashboard shrinks/grows with the actual device screen
     -- instead of being oversized on phones. Height is clamped so it
     -- never exceeds roughly 40% of the screen — everything fits in
     -- one glance without scrolling.
-    root.Size = UDim2.new(0.6, 0, 0.58, 0)
+    -- Width narrowed from 0.6 -> 0.52 so both edges clear the game's
+    -- own top-left (menu/chat) and top-right icons, and the top offset
+    -- bumped from 8 -> 70 so the navbar sits below that icon row too.
+    root.Size = UDim2.new(0.52, 0, 0.58, 0)
     root.BackgroundTransparency = 1
     root.Parent = gui
 
