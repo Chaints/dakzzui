@@ -15,7 +15,7 @@ local Sea1_IDs = {2753915549}
 if table.find(Sea2_IDs, placeId) then
     print("[Loader] Terdeteksi di SEA 2 (Public/PS)! Memuat script Sea 2...")
     local success, err = pcall(function()
-        loadstring(game:HttpGet("isi raw girhub dakkzzzz sea 2 harus udh obscate"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/Sea2b.lua"))()
     end)
     if not success then
         warn("[Loader Error] Gagal memuat script Sea 2! Detail: " .. tostring(err))
@@ -24,7 +24,7 @@ if table.find(Sea2_IDs, placeId) then
 elseif table.find(Sea3_IDs, placeId) then
     print("[Loader] Terdeteksi di SEA 3 (Public/PS)! Memuat script Sea 3...")
     local success, err = pcall(function()
-        loadstring(game:HttpGet("isi raw gihub sea 3 obscte"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/Sea3b.lua"))()
     end)
     if not success then
         warn("[Loader Error] Gagal memuat script Sea 3! Detail: " .. tostring(err))
