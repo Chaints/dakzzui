@@ -186,26 +186,26 @@ local function createNewLayoutUI()
     local activeTabName = "DASHBOARD"
     local cardHidden = false
 
-    local function createTabButton(name, order)
+    local function createTabButton(key, displayText, order)
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0, 64, 0, 28)
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
-        b.Text = name
+        b.Text = displayText
         b.TextColor3 = MUTED
         b.TextSize = 8
         b.Font = Enum.Font.GothamBold
         b.Parent = tabHolder
         corner(b, 14) -- full pill
-        tabButtons[name] = b
+        tabButtons[key] = b
         return b
     end
 
-    createTabButton("DASH", 1)
-    createTabButton("TARGET", 2)
-    createTabButton("COMBAT", 3)
-    createTabButton("HOP", 4)
+    createTabButton("DASHBOARD", "DASH", 1)
+    createTabButton("TARGETS", "TARGET", 2)
+    createTabButton("COMBAT", "COMBAT", 3)
+    createTabButton("HOP", "HOP", 4)
 
     --==================================================
     -- TAB BAR RIGHT-SIDE BUTTONS: toggle card visibility, close
