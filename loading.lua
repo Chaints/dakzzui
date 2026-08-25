@@ -160,6 +160,15 @@ shuffle(cells)
 -- FASE 1: JATUH DARI ATAS, ASSEMBLE JADI "Z x D"
 -- ==========================================
 
+-- Everything from here until the end of the animation is wrapped in a
+-- pcall. Without this, any error mid-animation (network hiccup, a stray
+-- nil, etc.) skips straight past the final gui:Destroy() at the bottom
+-- of the file, leaving the full-screen dark backdrop stuck on top of
+-- the game permanently — which is exactly what caused the giant dark
+-- rectangle covering the screen. Wrapping it means the backdrop always
+-- gets cleaned up, whether the animation finished normally or not.
+local animOk, animErr = pcall(function()
+
 for _, data in ipairs(cells) do
 	local cell = data.obj
 	local target = data.target
@@ -244,4 +253,15 @@ end
 
 task.wait(1.4)
 
+end) -- end pcall
+
+if not animOk then
+	warn("[ZDLoading] Animation error, cleaning up early: " .. tostring(animErr))
+end
+
+-- Always runs, whether the animation above completed normally or hit
+-- an error partway through. This is the fix: previously this line was
+-- only reachable if every tween/task.wait above succeeded, so any
+-- mid-animation error left the dark backdrop permanently stuck on
+-- screen since nothing else in the game ever calls gui:Destroy() for it.
 gui:Destroy()
