@@ -78,10 +78,16 @@ local function addShadow(obj, intensity)
     shadow.Size = UDim2.new(1, 18, 1, 18)
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
-    shadow.ZIndex = math.max((obj.ZIndex or 1) - 1, 0)
+    -- Must render BEHIND obj's own background. A ZIndex merely "1 less"
+    -- doesn't guarantee that in all cases (e.g. once obj.ZIndex is raised
+    -- for layering above siblings, like the navbar's ZIndex=10), and if
+    -- the image asset ever fails to load, ImageLabel falls back to a
+    -- solid-colored block — which then shows up as a giant dark rectangle
+    -- covering the parent. Pin it to ZIndex 1 (lowest sane value) and,
+    -- more importantly, only ever use this on cards whose own ZIndex is
+    -- the default (1), not on elements deliberately raised above others.
+    shadow.ZIndex = 1
     shadow.Parent = obj
-    -- push it behind obj's own background instead of behind everything
-    -- in the parent, so it doesn't bleed under sibling cards
     shadow:SetAttribute("_isShadow", true)
     return shadow
 end
@@ -130,16 +136,31 @@ local function createNewLayoutUI()
     --==================================================
     local root = Instance.new("Frame")
     root.Name = "Root"
-    -- Wide "landscape" layout instead of the old narrow/tall one: fixed
-    -- width big enough for two side-by-side cards, height grows to fit
-    -- whatever's inside (navbar + whichever tab is active) so nothing
-    -- ever gets clipped or forced to overlap.
-    root.Size = UDim2.fromOffset(620, 0)
+    -- Width is a fraction of the screen (Scale) instead of a fixed
+    -- pixel value — 620px fixed was wider than many phone screens'
+    -- actual game viewport, which squeezed the horizontal navbar
+    -- layout until Roblox couldn't lay it out properly (missing tabs,
+    -- everything crammed/rotated-looking). Clamping between a min and
+    -- max offset keeps it from getting silly-small on tiny phones or
+    -- absurdly wide on tablets/PC.
+    root.Size = UDim2.new(0.82, 0, 0, 0)
     root.AutomaticSize = Enum.AutomaticSize.Y
     root.AnchorPoint = Vector2.new(0.5, 0.5)
     root.Position = UDim2.new(0.5, 0, 0.4, 0)
     root.BackgroundTransparency = 1
     root.Parent = gui
+
+    -- Clamp the auto-scaled width to a sane pixel range so it still
+    -- looks like the intended two-column layout on both small phones
+    -- and large screens.
+    local function clampRootWidth()
+        local screenW = gui.AbsoluteSize.X
+        if screenW <= 0 then return end
+        local target = math.clamp(screenW * 0.82, 340, 620)
+        root.Size = UDim2.new(0, target, 0, 0)
+    end
+    gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampRootWidth)
+    task.defer(clampRootWidth)
 
     --==================================================
     -- NAVBAR — floating pill bar, standalone from any card below it.
@@ -173,15 +194,32 @@ local function createNewLayoutUI()
     navPadding.PaddingBottom = UDim.new(0, 10)
     navPadding.Parent = navbar
 
+    -- Vertical stack: row 1 (title + header buttons), row 2 (tab pills).
+    -- Two rows instead of cramming everything horizontally means the
+    -- navbar still fits on narrow phone screens without squeezing tabs
+    -- out or forcing weird wraps.
     local navLayout = Instance.new("UIListLayout")
-    navLayout.FillDirection = Enum.FillDirection.Horizontal
-    navLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     navLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    navLayout.Padding = UDim.new(0, 10)
+    navLayout.Padding = UDim.new(0, 8)
     navLayout.Parent = navbar
 
+    local titleRow = Instance.new("Frame")
+    titleRow.Name = "TitleRow"
+    titleRow.Size = UDim2.new(1, 0, 0, 26)
+    titleRow.LayoutOrder = 1
+    titleRow.BackgroundTransparency = 1
+    titleRow.ZIndex = 6
+    titleRow.Parent = navbar
+
+    local titleRowLayout = Instance.new("UIListLayout")
+    titleRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    titleRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    titleRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    titleRowLayout.Padding = UDim.new(0, 8)
+    titleRowLayout.Parent = titleRow
+
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.fromOffset(118, 26)
+    title.Size = UDim2.new(1, -90, 1, 0) -- shrinks to fit, header buttons take the rest
     title.LayoutOrder = 1
     title.BackgroundTransparency = 1
     title.Text = "BOUNTY HUNTER"
@@ -190,24 +228,30 @@ local function createNewLayoutUI()
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextTruncate = Enum.TextTruncate.AtEnd
-    title.Parent = navbar
+    title.Parent = titleRow
 
     --==================================================
-    -- TAB BAR — fills the remaining horizontal space between the
-    -- title and the header buttons, tabs laid out left-to-right.
+    -- TAB BAR — full-width second row under the title. Uses a
+    -- UIGridLayout with a computed cell size (see below) so the four
+    -- tabs always fit the available width instead of overflowing on
+    -- narrow phone screens.
     --==================================================
     local tabBar = Instance.new("Frame")
     tabBar.Name = "TabRow"
-    tabBar.Size = UDim2.new(1, -246, 0, 26) -- room left after title(118)+pad+buttons(~90)
+    tabBar.Size = UDim2.new(1, 0, 0, 26)
     tabBar.LayoutOrder = 2
     tabBar.BackgroundTransparency = 1
+    tabBar.ZIndex = 6
     tabBar.Parent = navbar
 
-    local tabLayout = Instance.new("UIListLayout")
-    tabLayout.FillDirection = Enum.FillDirection.Horizontal
-    tabLayout.Padding = UDim.new(0, 6)
-    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabLayout.Parent = tabBar
+
+    local tabGrid = Instance.new("UIGridLayout")
+    tabGrid.FillDirection = Enum.FillDirection.Horizontal
+    tabGrid.FillDirectionMaxCells = 4
+    tabGrid.CellPadding = UDim2.fromOffset(6, 0)
+    tabGrid.CellSize = UDim2.new(0.25, -5, 1, 0) -- 4 equal columns, shrinks with tabBar
+    tabGrid.SortOrder = Enum.SortOrder.LayoutOrder
+    tabGrid.Parent = tabBar
 
     local tabButtons = {}
     local tabContainers = {}
@@ -215,7 +259,6 @@ local function createNewLayoutUI()
 
     local function createTabButton(name, label, order)
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0, 70, 1, 0)
         b.LayoutOrder = order
         b.BackgroundColor3 = CARD2
         b.AutoButtonColor = false
@@ -223,6 +266,7 @@ local function createNewLayoutUI()
         b.TextColor3 = MUTED
         b.TextSize = 8
         b.Font = Enum.Font.GothamBold
+        b.TextScaled = false
         b.ZIndex = 5
         b.Parent = tabBar
         corner(b, 13) -- full pill (half of the 26px tab bar height)
@@ -239,7 +283,7 @@ local function createNewLayoutUI()
     createTabButton("COMBAT", "COMBAT", 3)
     createTabButton("HOP", "HOP", 4)
 
-    -- header buttons: collapse / stop (far right of the navbar)
+    -- header buttons: collapse / stop (top-right, same row as title)
     local function headerButton(icon, order, size)
         local b = Instance.new("TextButton")
         b.Size = UDim2.fromOffset(size or 30, size or 30)
@@ -252,7 +296,7 @@ local function createNewLayoutUI()
         b.Font = Enum.Font.GothamBold
         b.AutoButtonColor = false
         b.ZIndex = 5
-        b.Parent = navbar
+        b.Parent = titleRow
         corner(b, 8)
 
         b.MouseButton1Down:Connect(function()
@@ -268,10 +312,10 @@ local function createNewLayoutUI()
         return b
     end
 
-    local hideBtn = headerButton("><", 3, 30)
+    local hideBtn = headerButton("><", 2, 30)
     hideBtn.TextSize = 11
 
-    local stopBtn = headerButton("×", 4, 28)
+    local stopBtn = headerButton("×", 3, 28)
     stopBtn.TextSize = 16
 
     --==================================================
