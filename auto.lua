@@ -1,19 +1,18 @@
-print("[Bounty Hunter] Menjalankan inisialisasi awal (JSON Persistent & Modular UI)...")
+print("[Bounty Hunter] Menjalankan Unified Script (UI + Logic) - Anti Lag/Bug...")
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local Workspace = game:GetService("Workspace")
 
 -- ==========================================
--- GLOBAL DEFAULT CONFIGURATIONS
+-- 1. GLOBAL CONFIG & JSON SAVE
 -- ==========================================
-_G.AutoHuntEnabled = _G.AutoHuntEnabled ~= nil and _G.AutoHuntEnabled or false
+_G.AutoHuntEnabled = false
 _G.CustomFlightSpeed = _G.CustomFlightSpeed or 300
 _G.CombatConfig = _G.CombatConfig or {
     ["Sword"] = {Z = {On=true}, X = {On=true}, C = {On=false}, V = {On=false}, F = {On=false}},
@@ -22,522 +21,437 @@ _G.CombatConfig = _G.CombatConfig or {
     ["Melee"] = {Z = {On=true}, X = {On=true}, C = {On=true}, V = {On=false}, F = {On=false}}
 }
 
--- ==========================================
--- JSON PERSISTENT CONFIG SYSTEM (AUTO SAVE/LOAD)
--- ==========================================
 local ConfigFileName = "BountyHunterConfig.json"
 
 local function saveConfig()
     pcall(function()
         if writefile then
-            local data = {
-                AutoHunt = _G.AutoHuntEnabled,
-                FlightSpeed = _G.CustomFlightSpeed,
-                Combat = _G.CombatConfig
-            }
+            local data = {AutoHunt = _G.AutoHuntEnabled, FlightSpeed = _G.CustomFlightSpeed, Combat = _G.CombatConfig}
             writefile(ConfigFileName, HttpService:JSONEncode(data))
         end
     end)
 end
 
-local function loadConfig()
-    pcall(function()
-        if readfile and isfile and isfile(ConfigFileName) then
-            local decoded = HttpService:JSONDecode(readfile(ConfigFileName))
-            if type(decoded) == "table" then
-                if decoded.AutoHunt ~= nil then _G.AutoHuntEnabled = decoded.AutoHunt end
-                if decoded.FlightSpeed then _G.CustomFlightSpeed = decoded.FlightSpeed end
-                if type(decoded.Combat) == "table" then _G.CombatConfig = decoded.Combat end
-                print("[Bounty Hunter] Konfigurasi JSON berhasil dimuat!")
-            end
-        end
-    end)
-end
-
-loadConfig()
-
--- ==========================================
--- SMART UI PARENTING & UI CLEANUP
--- ==========================================
-local SafeUIParent
-pcall(function() SafeUIParent = (typeof(gethui) == "function" and gethui()) or game:GetService("CoreGui") end)
-if not SafeUIParent or not pcall(function() return SafeUIParent.Name end) then
-    SafeUIParent = LocalPlayer:WaitForChild("PlayerGui", 10)
-end
-
 pcall(function()
-    if SafeUIParent and SafeUIParent:FindFirstChild("BountyHunterDashboard") then SafeUIParent.BountyHunterDashboard:Destroy() end
-    if workspace:FindFirstChild("AntiWaterPlatform") then workspace.AntiWaterPlatform:Destroy() end
+    if readfile and isfile and isfile(ConfigFileName) then
+        local decoded = HttpService:JSONDecode(readfile(ConfigFileName))
+        if type(decoded) == "table" then
+            if decoded.AutoHunt ~= nil then _G.AutoHuntEnabled = decoded.AutoHunt end
+            if decoded.FlightSpeed then _G.CustomFlightSpeed = decoded.FlightSpeed end
+            if type(decoded.Combat) == "table" then _G.CombatConfig = decoded.Combat end
+        end
+    end
 end)
 
 -- ==========================================
--- LOAD UI MODULE (ui.lua)
+-- 2. CORE LOGIC VARIABLES
 -- ==========================================
-local UI_RAW_URL = "https://raw.githubusercontent.com/Chaints/dakzzui/main/ui.lua"
-
-local UIModule
-do
-    local ok, result = pcall(function() return loadstring(game:HttpGet(UI_RAW_URL))() end)
-    if ok and result then UIModule = result else warn("[Bounty Hunter] Gagal load ui.lua:", result) end
-end
-
 local state = {
     currentTargetPlayer = nil,
     manualSkipList = {},
     manualSkipRequested = false,
-    isHunting = false,
     stopRequested = false,
-    saveConfig = saveConfig -- Kirim fungsi save ke UI biar slider/tombol skill bisa autosave
 }
 
-local UI
-if UIModule then
-    local ok, result = pcall(function() return UIModule.Init(SafeUIParent, state) end)
-    if ok then UI = result else warn("[Bounty Hunter] Gagal inisialisasi ui.lua:", result) end
-end
-
 local totalHadiahDiperoleh = 0
-
-local function createNewLayoutUI() if UI and not state.stopRequested then UI.createNewLayoutUI() end end
-local function updateHUDDisplay(player) if UI and not state.stopRequested then UI.updateHUDDisplay(player, totalHadiahDiperoleh) end end
-local function addTargetLogEntry(entryText) if UI and not state.stopRequested then UI.addTargetLogEntry(entryText) end end
-
--- Sync loop
-task.spawn(function()
-    while not state.stopRequested do
-        task.wait(0.1)
-        state.isHunting = _G.AutoHuntEnabled
-    end
-end)
-
--- ==========================================
--- REMOTE EVENTS INITIALIZER & VARIABLES
--- ==========================================
-local ModulesFolder = ReplicatedStorage:WaitForChild("Modules", 5)
-local Net = ModulesFolder and ModulesFolder:WaitForChild("Net", 5)
-local RegisterAttack = Net and Net:WaitForChild("RE/RegisterAttack")
-local RegisterHit = Net and Net:WaitForChild("RE/RegisterHit")
-
-local JedaSenjataAsli = 0.4000000059604645
-local TokenKeamanan = "083cf9b7"
-
-local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
-local CommF = RemotesFolder and RemotesFolder:WaitForChild("CommF_", 3)
-local CommE = RemotesFolder and RemotesFolder:WaitForChild("CommE", 3)
-local ClockFolder = RemotesFolder and RemotesFolder:FindFirstChild("Clock")
-local MasterClockRemote = ClockFolder and ClockFolder:WaitForChild("DelayedRequestFunction", 3)
-
-local M1_ATTACK_RANGE = 17.0   
-local SKILL_ATTACK_RANGE = 10.0 
-local MAGNET_RANGE = 8.0       
-
-local combatConnection, noclipConnection, skillThread, m1Thread
-local currentTargetPlayer = nil 
-local hasTeleportedToIsland = false 
 local isHunting = false
 local isEmergencyRetreating = false
-
-local bountyBlacklist = {} 
+local combatConnection, noclipConnection, skillThread, m1Thread
 local activeESP = {}
-local isTargetInActiveFight = false 
+local bountyBlacklist = {}
 
 -- ==========================================
--- PERSISTENT SERVER HOP QUEUE 
+-- 3. EMBEDDED UI MODULE (Biar ga panggil GitHub)
 -- ==========================================
-_G.PersistentReadyJobIds = _G.PersistentReadyJobIds or {}
-if not _G.ServerScannerInitialized then
-    _G.ServerScannerInitialized = true
-    task.spawn(function()
-        local serverBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser", 5)
-        local currentPage = 1
-        while task.wait(0.5) do
-            if #_G.PersistentReadyJobIds >= 2 or currentPage > 200 then break end
-            if serverBrowser then
-                local success, servers = pcall(function() return serverBrowser:InvokeServer(currentPage) end)
-                if success and type(servers) == "table" then
-                    for jobId, serverData in pairs(servers) do
-                        local count = type(serverData) == "table" and (serverData.Count or serverData.Players) or (type(serverData) == "number" and serverData or 0)
-                        if count > 0 and count < 7 and jobId ~= game.JobId then
-                            local alreadyInQueue = false
-                            for _, qId in ipairs(_G.PersistentReadyJobIds) do if qId == jobId then alreadyInQueue = true break end end
-                            if not alreadyInQueue then
-                                table.insert(_G.PersistentReadyJobIds, jobId)
-                                if #_G.PersistentReadyJobIds >= 2 then break end
-                            end
-                        end
-                    end
-                end
-                currentPage = currentPage + 1
-            end
-        end
-    end)
-end
+local SafeUIParent
+pcall(function() SafeUIParent = (typeof(gethui) == "function" and gethui()) or game:GetService("CoreGui") end)
+if not SafeUIParent or not pcall(function() return SafeUIParent.Name end) then SafeUIParent = LocalPlayer:WaitForChild("PlayerGui", 10) end
 
--- ==========================================
--- ESP SYSTEM
--- ==========================================
-local function createPlayerESP(player)
-    if player == LocalPlayer or not SafeUIParent then return end
-    pcall(function()
-        local guiName = "ESP_" .. player.Name
-        local existingGui = SafeUIParent:FindFirstChild(guiName)
-        if existingGui then existingGui:Destroy() end
-
-        local billboardGui = Instance.new("BillboardGui")
-        billboardGui.Name = guiName
-        billboardGui.AlwaysOnTop = true
-        billboardGui.Size = UDim2.new(0, 200, 0, 50)
-        billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-        billboardGui.Parent = SafeUIParent
-
-        local textLabel = Instance.new("TextLabel", billboardGui)
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        textLabel.TextStrokeTransparency = 0.2
-        textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        textLabel.Font = Enum.Font.SourceSansBold
-        textLabel.TextSize = 14
-        textLabel.Text = player.Name
-
-        activeESP[player] = {Gui = billboardGui, Label = textLabel}
-
-        local connection
-        connection = RunService.RenderStepped:Connect(function()
-            pcall(function()
-                if not player or not player.Parent then
-                    billboardGui:Destroy() activeESP[player] = nil connection:Disconnect() return
-                end
-                local char, myChar = player.Character, LocalPlayer.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-                if root and myRoot then
-                    billboardGui.Adornee = root
-                    local distance = math.floor((myRoot.Position - root.Position).Magnitude)
-                    if player == state.currentTargetPlayer then
-                        textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-                        textLabel.Text = "[TARGET] " .. player.Name .. " [" .. distance .. " studs]"
-                    else
-                        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        textLabel.Text = player.Name .. " [" .. distance .. " studs]"
-                    end
-                else
-                    billboardGui.Adornee = nil
-                end
-            end)
-        end)
-    end)
-end
-
-for _, p in pairs(Players:GetPlayers()) do createPlayerESP(p) end
-Players.PlayerAdded:Connect(createPlayerESP)
-Players.PlayerRemoving:Connect(function(p)
-    if activeESP[p] then pcall(function() activeESP[p].Gui:Destroy() end) activeESP[p] = nil end
+pcall(function()
+    if SafeUIParent:FindFirstChild("BountyHunterDashboard") then SafeUIParent.BountyHunterDashboard:Destroy() end
 end)
 
--- ==========================================
--- UTILITIES & SAFETY
--- ==========================================
-local function enableNoclip()
-    if noclipConnection then return end
-    noclipConnection = RunService.Stepped:Connect(function()
-        pcall(function()
-            local char = LocalPlayer.Character
-            if char then
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
-                end
+local UIRefs = {}
+local TweenService = game:GetService("TweenService")
+
+local function corner(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 10)
+    c.Parent = obj
+    return c
+end
+
+local function uistroke(obj, color, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color
+    s.Thickness = 1
+    s.Transparency = transparency or 0.35
+    s.Parent = obj
+    return s
+end
+
+local function tween(obj, duration, props)
+    local t = TweenService:Create(obj, TweenInfo.new(duration or 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+    t:Play()
+    return t
+end
+
+local function addShadow(obj)
+    local shadow = Instance.new("ImageLabel")
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://5028857084"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.55
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(24, 24, 276, 276)
+    shadow.Size = UDim2.new(1, 18, 1, 18)
+    shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
+    shadow.ZIndex = obj.ZIndex - 1
+    shadow.Parent = obj
+end
+
+local function createNewLayoutUI()
+    if not SafeUIParent or SafeUIParent:FindFirstChild("BountyHunterDashboard") then return end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BountyHunterDashboard"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999
+    gui.Parent = SafeUIParent
+
+    local BG = Color3.fromRGB(31, 7, 13)
+    local CARD = Color3.fromRGB(85, 11, 24)
+    local CARD2 = Color3.fromRGB(105, 20, 35)
+    local STROKE = Color3.fromRGB(140, 60, 70)
+    local TEXT = Color3.fromRGB(242, 229, 197)
+    local MUTED = Color3.fromRGB(200, 175, 145)
+    local GREEN = Color3.fromRGB(120, 200, 130)
+
+    -- TAB BAR
+    local tabBarFrame = Instance.new("Frame")
+    tabBarFrame.Size = UDim2.fromOffset(390, 46)
+    tabBarFrame.AnchorPoint = Vector2.new(0.5, 0)
+    tabBarFrame.Position = UDim2.new(0.5, 0, 0.30, 0)
+    tabBarFrame.BackgroundColor3 = CARD
+    tabBarFrame.ZIndex = 10
+    tabBarFrame.Parent = gui
+    corner(tabBarFrame, 23)
+    addShadow(tabBarFrame)
+    uistroke(tabBarFrame, STROKE, 0.25)
+
+    local tabHolder = Instance.new("Frame")
+    tabHolder.Size = UDim2.fromOffset(280, 32)
+    tabHolder.Position = UDim2.new(0, 32, 0.5, -16)
+    tabHolder.BackgroundTransparency = 1
+    tabHolder.ZIndex = 11
+    tabHolder.Parent = tabBarFrame
+
+    local tabLayout = Instance.new("UIListLayout")
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.Padding = UDim.new(0, 6)
+    tabLayout.Parent = tabHolder
+
+    local tabButtons, tabContainers = {}, {}
+    local function createTabBtn(key, text, order)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, 64, 0, 28)
+        b.LayoutOrder = order
+        b.BackgroundColor3 = CARD2
+        b.Text = text
+        b.TextColor3 = MUTED
+        b.TextSize = 9
+        b.Font = Enum.Font.GothamBold
+        b.ZIndex = 12
+        b.Parent = tabHolder
+        corner(b, 14)
+        tabButtons[key] = b
+    end
+    createTabBtn("DASH", "DASH", 1)
+    createTabBtn("LOG", "TARGET", 2)
+    createTabBtn("COMBAT", "COMBAT", 3)
+
+    local hideBtn = Instance.new("TextButton")
+    hideBtn.Size = UDim2.fromOffset(26, 26)
+    hideBtn.Position = UDim2.new(1, -46, 0.5, -13)
+    hideBtn.BackgroundColor3 = CARD2
+    hideBtn.Text = "▾"
+    hideBtn.TextColor3 = TEXT
+    hideBtn.ZIndex = 12
+    hideBtn.Parent = tabBarFrame
+    corner(hideBtn, 99)
+
+    -- MAIN CARD
+    local main = Instance.new("Frame")
+    main.Size = UDim2.fromOffset(390, 230)
+    main.AnchorPoint = Vector2.new(0.5, 0)
+    main.Position = UDim2.new(0.5, 0, 0.30, 60)
+    main.BackgroundColor3 = BG
+    main.ZIndex = 5
+    main.Parent = gui
+    corner(main, 22)
+    addShadow(main)
+    uistroke(main, STROKE, 0.2)
+
+    local function newTab(name)
+        local c = Instance.new("Frame")
+        c.Size = UDim2.new(1, -28, 1, -28)
+        c.Position = UDim2.fromOffset(14, 14)
+        c.BackgroundTransparency = 1
+        c.Visible = (name == "DASH")
+        c.ZIndex = 6
+        c.Parent = main
+        tabContainers[name] = c
+        return c
+    end
+
+    -- TAB: DASHBOARD
+    local dashTab = newTab("DASH")
+    local infoValues = {}
+
+    local huntBtn = Instance.new("TextButton")
+    huntBtn.Size = UDim2.new(1, 0, 0, 32)
+    huntBtn.BackgroundColor3 = _G.AutoHuntEnabled and GREEN or CARD2
+    huntBtn.Text = _G.AutoHuntEnabled and "AUTO HUNT: ON" or "AUTO HUNT: OFF"
+    huntBtn.TextColor3 = _G.AutoHuntEnabled and Color3.fromRGB(20,50,20) or TEXT
+    huntBtn.Font = Enum.Font.GothamBold
+    huntBtn.ZIndex = 7
+    huntBtn.Parent = dashTab
+    corner(huntBtn, 12)
+
+    huntBtn.MouseButton1Click:Connect(function()
+        _G.AutoHuntEnabled = not _G.AutoHuntEnabled
+        huntBtn.BackgroundColor3 = _G.AutoHuntEnabled and GREEN or CARD2
+        huntBtn.Text = _G.AutoHuntEnabled and "AUTO HUNT: ON" or "AUTO HUNT: OFF"
+        huntBtn.TextColor3 = _G.AutoHuntEnabled and Color3.fromRGB(20,50,20) or TEXT
+        saveConfig()
+    end)
+    UIRefs.huntBtn = huntBtn
+
+    local infoCard = Instance.new("Frame")
+    infoCard.Size = UDim2.new(1, 0, 1, -40)
+    infoCard.Position = UDim2.fromOffset(0, 40)
+    infoCard.BackgroundColor3 = CARD
+    infoCard.ZIndex = 7
+    infoCard.Parent = dashTab
+    corner(infoCard, 14)
+
+    local function infoRow(name, y)
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -28, 0, 18)
+        lbl.Position = UDim2.fromOffset(14, y)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = name .. ": -"
+        lbl.TextColor3 = TEXT
+        lbl.TextSize = 10
+        lbl.Font = Enum.Font.GothamMedium
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.ZIndex = 8
+        lbl.Parent = infoCard
+        infoValues[name] = lbl
+    end
+    infoRow("STATUS", 10); infoRow("NAMA", 30); infoRow("LEVEL", 50); infoRow("BOUNTY", 70); infoRow("REWARD", 100)
+    UIRefs.infoValues = infoValues
+
+    -- TAB: COMBAT (FIXED STROKE LEAK)
+    local combatTab = newTab("COMBAT")
+    local skRow = Instance.new("Frame")
+    skRow.Size = UDim2.new(1, 0, 0, 36)
+    skRow.Position = UDim2.fromOffset(0, 50)
+    skRow.BackgroundTransparency = 1
+    skRow.ZIndex = 7
+    skRow.Parent = combatTab
+    
+    local skLayout = Instance.new("UIListLayout")
+    skLayout.FillDirection = Enum.FillDirection.Horizontal
+    skLayout.Padding = UDim.new(0, 10)
+    skLayout.Parent = skRow
+
+    local selectedCat = "Fruit"
+    local skillUIs, skillStrokes = {}, {}
+    local skills = {"Z", "X", "C", "V", "F"}
+
+    for _, sk in ipairs(skills) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, 45, 1, 0)
+        b.Font = Enum.Font.GothamBold
+        b.Text = sk
+        b.ZIndex = 8
+        b.Parent = skRow
+        corner(b, 8)
+        skillStrokes[sk] = uistroke(b, STROKE, 0.4)
+        skillUIs[sk] = b
+
+        b.MouseButton1Click:Connect(function()
+            if _G.CombatConfig[selectedCat] and _G.CombatConfig[selectedCat][sk] then
+                _G.CombatConfig[selectedCat][sk].On = not _G.CombatConfig[selectedCat][sk].On
+                local isOn = _G.CombatConfig[selectedCat][sk].On
+                b.BackgroundColor3 = isOn and TEXT or CARD2
+                b.TextColor3 = isOn and BG or MUTED
+                skillStrokes[sk].Transparency = isOn and 0 or 0.4
+                saveConfig()
             end
         end)
-    end)
-end
-
-local function disableNoclip()
-    if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
-end
-
-local function getOrCreatePlatform()
-    local platform = Workspace:FindFirstChild("AntiWaterPlatform")
-    if not platform then
-        platform = Instance.new("Part")
-        platform.Name = "AntiWaterPlatform"
-        platform.Size = Vector3.new(10, 1, 10)
-        platform.Transparency = 1
-        platform.Anchored = true
-        platform.CanCollide = true
-        platform.Parent = Workspace
     end
-    return platform
+
+    local function refreshSkills()
+        for _, sk in ipairs(skills) do
+            local isOn = _G.CombatConfig[selectedCat] and _G.CombatConfig[selectedCat][sk] and _G.CombatConfig[selectedCat][sk].On
+            skillUIs[sk].BackgroundColor3 = isOn and TEXT or CARD2
+            skillUIs[sk].TextColor3 = isOn and BG or MUTED
+            skillStrokes[sk].Transparency = isOn and 0 or 0.4
+        end
+    end
+    refreshSkills()
+
+    local catRow = Instance.new("Frame")
+    catRow.Size = UDim2.new(1, 0, 0, 26)
+    catRow.BackgroundTransparency = 1
+    catRow.ZIndex = 7
+    catRow.Parent = combatTab
+    local catLayout = Instance.new("UIListLayout")
+    catLayout.FillDirection = Enum.FillDirection.Horizontal
+    catLayout.Padding = UDim.new(0, 10)
+    catLayout.Parent = catRow
+
+    local catBtns = {}
+    for _, cat in ipairs({"Melee", "Sword", "Fruit", "Gun"}) do
+        local cb = Instance.new("TextButton")
+        cb.Size = UDim2.new(0, 70, 1, 0)
+        cb.Text = cat
+        cb.Font = Enum.Font.GothamMedium
+        cb.TextSize = 10
+        cb.ZIndex = 8
+        cb.Parent = catRow
+        corner(cb, 6)
+        catBtns[cat] = cb
+        cb.MouseButton1Click:Connect(function()
+            selectedCat = cat
+            for k, v in pairs(catBtns) do
+                v.BackgroundColor3 = (k == selectedCat) and CARD2 or CARD
+                v.TextColor3 = (k == selectedCat) and TEXT or MUTED
+            end
+            refreshSkills()
+        end)
+    end
+    catBtns["Fruit"].BackgroundColor3 = CARD2
+
+    local skipBtn = Instance.new("TextButton")
+    skipBtn.Size = UDim2.new(1, 0, 0, 36)
+    skipBtn.Position = UDim2.fromOffset(0, 100)
+    skipBtn.BackgroundColor3 = CARD2
+    skipBtn.Text = "SKIP CURRENT TARGET"
+    skipBtn.TextColor3 = TEXT
+    skipBtn.Font = Enum.Font.GothamBold
+    skipBtn.ZIndex = 8
+    skipBtn.Parent = combatTab
+    corner(skipBtn, 10)
+    skipBtn.MouseButton1Click:Connect(function()
+        if state.currentTargetPlayer then
+            state.manualSkipList[state.currentTargetPlayer.Name] = true
+            state.manualSkipRequested = true
+            skipBtn.Text = "SKIPPED!"
+            task.wait(0.5)
+            skipBtn.Text = "SKIP CURRENT TARGET"
+        end
+    end)
+
+    -- LOGO ZxD (Fixed Drag & Clicks)
+    local logo = Instance.new("TextButton")
+    logo.Size = UDim2.fromOffset(52, 52)
+    logo.Position = UDim2.new(0, 46, 0, 90)
+    logo.BackgroundColor3 = BG
+    logo.Text = "ZxD"
+    logo.TextColor3 = TEXT
+    logo.Font = Enum.Font.GothamBlack
+    logo.TextSize = 16
+    logo.ZIndex = 50
+    logo.Parent = gui
+    corner(logo, 26)
+    uistroke(logo, STROKE, 0.15)
+
+    local isHidden = false
+    hideBtn.MouseButton1Click:Connect(function()
+        isHidden = not isHidden
+        main.Visible = not isHidden
+        hideBtn.Text = isHidden and "▸" or "▾"
+    end)
+
+    local dragStart, startPos, moved
+    logo.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragStart, startPos, moved = input.Position, logo.Position, false
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragStart = nil end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragStart and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            if delta.Magnitude > 5 then moved = true end
+            logo.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    logo.MouseButton1Click:Connect(function()
+        if moved then return end
+        local vis = not tabBarFrame.Visible
+        tabBarFrame.Visible = vis
+        main.Visible = vis and not isHidden
+    end)
+
+    for tabName, btn in pairs(tabButtons) do
+        btn.MouseButton1Click:Connect(function()
+            for k, c in pairs(tabContainers) do c.Visible = (k == tabName) end
+            for k, b in pairs(tabButtons) do
+                b.BackgroundColor3 = (k == tabName) and TEXT or CARD2
+                b.TextColor3 = (k == tabName) and BG or MUTED
+            end
+        end)
+    end
 end
 
-local function autoOnHakiAndInstinct()
+local function updateHUDDisplay(player, reward)
     pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        if not char:FindFirstChild("HasBuso") then if CommF then CommF:InvokeServer("Buso") end end
-        if CommE then CommE:FireServer("Ken", true) end
-    end)
-end
-
-local function activateRaceV3AndV4()
-    pcall(function() 
-        if CommE then CommE:FireServer("ActivateAbility"); CommE:FireServer("ActivateAwakening") end 
-    end)
-end
-
-local function equipWeaponCategory(categoryName)
-    local backpack, char = LocalPlayer:FindFirstChild("Backpack"), LocalPlayer.Character
-    if not backpack or not char then return nil end
-
-    local currentTool = char:FindFirstChildOfClass("Tool")
-    if currentTool and (currentTool.Name:lower():find(categoryName:lower()) or (currentTool:FindFirstChild("ToolTip") and tostring(currentTool.ToolTip.Value):lower():find(categoryName:lower()))) then 
-        return currentTool 
-    end
-
-    for _, item in pairs(backpack:GetChildren()) do
-        if item:IsA("Tool") and (item.Name:lower():find(categoryName:lower()) or (item:FindFirstChild("ToolTip") and tostring(item.ToolTip.Value):lower():find(categoryName:lower()))) then
-            local hum = char:WaitForChild("Humanoid", 2)
-            if hum then hum:EquipTool(item); task.wait(0.05); return item end
+        if not UIRefs.infoValues then return end
+        local iv = UIRefs.infoValues
+        if UIRefs.huntBtn then
+            UIRefs.huntBtn.BackgroundColor3 = _G.AutoHuntEnabled and Color3.fromRGB(120, 200, 130) or Color3.fromRGB(105, 20, 35)
+            UIRefs.huntBtn.Text = _G.AutoHuntEnabled and "AUTO HUNT: ON" or "AUTO HUNT: OFF"
+            UIRefs.huntBtn.TextColor3 = _G.AutoHuntEnabled and Color3.fromRGB(20,50,20) or Color3.fromRGB(242, 229, 197)
         end
-    end
-    return nil
-end
-
--- ==========================================
--- PVP VALIDATION
--- ==========================================
-local function isAlly(targetPlayer)
-    if not targetPlayer then return true end
-    if LocalPlayer.Team and targetPlayer.Team and LocalPlayer.Team == targetPlayer.Team and LocalPlayer.Team.Name == "Marines" then return true end
-    local myCrew = LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Crew")
-    local targetCrew = targetPlayer:FindFirstChild("Data") and targetPlayer.Data:FindFirstChild("Crew")
-    if myCrew and targetCrew and myCrew.Value ~= "" and myCrew.Value == targetCrew.Value then return true end
-    return false
-end
-
-local function isPlayerEligibleForPvP(targetPlayer)
-    if not targetPlayer or not targetPlayer.Parent or targetPlayer == LocalPlayer then return false end
-    
-    if isTargetInActiveFight and targetPlayer == currentTargetPlayer then
-        local char = targetPlayer.Character
-        if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then return true end
-    end
-
-    if state.manualSkipList[targetPlayer.Name] then return false end
-    if bountyBlacklist[targetPlayer.Name] and os.time() < bountyBlacklist[targetPlayer.Name] then return false end
-    if targetPlayer:FindFirstChild("DiedRecently") or (targetPlayer:FindFirstChild("PlayerStats") and targetPlayer.PlayerStats:FindFirstChild("DiedRecently")) then return false end
-    
-    local char = targetPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char and char:FindFirstChild("Humanoid")
-    if not char or not humanoid or humanoid.Health <= 0 or not root then return false end
-    if char:FindFirstChild("DiedRecently") or char:FindFirstChildOfClass("ForceField") or char:FindFirstChild("SafeZone") then return false end
-    
-    if char:GetAttribute("SafeZone") or targetPlayer:GetAttribute("SafeZone") or char:GetAttribute("PvPDisabled") or targetPlayer:GetAttribute("PvPDisabled") then return false end
-    if targetPlayer:FindFirstChild("PvPDisabled") and targetPlayer.PvPDisabled.Value == true then return false end
-    
-    local dataFolder = targetPlayer:FindFirstChild("Data")
-    if dataFolder then
-        local safeZoneVal = dataFolder:FindFirstChild("SafeZone")
-        if safeZoneVal and safeZoneVal.Value == true then return false end
-        local pvpVal = dataFolder:FindFirstChild("PvP") or dataFolder:FindFirstChild("PvPDisabled")
-        if pvpVal and (pvpVal.Value == false or (pvpVal.Value == true and pvpVal.Name:lower():find("disabled"))) then return false end
-    end
-
-    if isAlly(targetPlayer) then return false end
-    return true
-end
-
--- ==========================================
--- ATTACK LOOPS
--- ==========================================
-local function startM1Loop(targetPlayer)
-    if m1Thread then task.cancel(m1Thread) m1Thread = nil end
-    m1Thread = task.spawn(function()
-        while isHunting and _G.AutoHuntEnabled and currentTargetPlayer == targetPlayer and isPlayerEligibleForPvP(targetPlayer) do
-            local myChar = LocalPlayer.Character
-            local tChar = targetPlayer and targetPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-
-            if myRoot and tRoot and tHum and tHum.Health > 0 then
-                local currentHPPercent = (tHum.Health / tHum.MaxHealth) * 100
-                if currentHPPercent <= 80 and currentHPPercent >= 50 then
-                    isTargetInActiveFight = true
-                    equipWeaponCategory("Melee")
-                    if (myRoot.Position - tRoot.Position).Magnitude <= M1_ATTACK_RANGE then
-                        for comboKe = 1, 4 do
-                            if RegisterAttack then RegisterAttack:FireServer(JedaSenjataAsli, comboKe) end
-                            local partTarget = tRoot or tChar:FindFirstChild("UpperTorso")
-                            if partTarget and RegisterHit then RegisterHit:FireServer(partTarget, {}, TokenKeamanan) end
-                        end
-                    end
-                end
-            end
-            task.wait(0.01) 
-        end
-    end)
-end
-
-local function startSkillLoop(targetPlayer)
-    if skillThread then task.cancel(skillThread) skillThread = nil end
-    skillThread = task.spawn(function()
-        local weaponCategories = {"Melee", "Fruit", "Sword", "Gun"}
-        local skillKeys = {"Z", "X", "C", "V", "F"}
-        local keyCodeMap = {["Z"]=Enum.KeyCode.Z, ["X"]=Enum.KeyCode.X, ["C"]=Enum.KeyCode.C, ["V"]=Enum.KeyCode.V, ["F"]=Enum.KeyCode.F}
-
-        while isHunting and _G.AutoHuntEnabled and currentTargetPlayer == targetPlayer and isPlayerEligibleForPvP(targetPlayer) do
-            local myChar = LocalPlayer.Character
-            local tChar = targetPlayer and targetPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-
-            if myRoot and tRoot and tHum and tHum.Health > 0 then
-                local currentHPPercent = (tHum.Health / tHum.MaxHealth) * 100
-                if (currentHPPercent > 80 and currentHPPercent <= 100) or (currentHPPercent < 50) then
-                    isTargetInActiveFight = true
-                    if (myRoot.Position - tRoot.Position).Magnitude <= SKILL_ATTACK_RANGE then 
-                        autoOnHakiAndInstinct()
-                        activateRaceV3AndV4()
-
-                        for _, category in ipairs(weaponCategories) do
-                            if not currentTargetPlayer or not isPlayerEligibleForPvP(currentTargetPlayer) then break end
-                            local equippedTool = equipWeaponCategory(category)
-                            if equippedTool then
-                                local targetPos = tRoot.Position
-                                local toolRemote = equippedTool:FindFirstChild("RemoteEvent") or equippedTool:FindFirstChildOfClass("RemoteEvent")
-                                if toolRemote then
-                                    for _, key in ipairs(skillKeys) do
-                                        local catConfig = _G.CombatConfig[category]
-                                        if catConfig and catConfig[key] and catConfig[key].On then
-                                            pcall(function()
-                                                if key == "X" then toolRemote:FireServer("X", false) else toolRemote:FireServer(key, targetPos) end
-                                                task.spawn(function()
-                                                    VirtualInputManager:SendKeyEvent(true, keyCodeMap[key], false, game)
-                                                    task.wait(0.05)
-                                                    VirtualInputManager:SendKeyEvent(false, keyCodeMap[key], false, game)
-                                                end)
-                                            end)
-                                            task.wait(0.08)
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            task.wait(0.1) 
+        iv["REWARD"].Text = "REWARD: +" .. tostring(reward or 0)
+        
+        if player and player.Parent then
+            iv["STATUS"].Text = "STATUS: Menyerang"
+            iv["NAMA"].Text = "NAMA: " .. player.Name
+            local data = player:FindFirstChild("Data")
+            iv["LEVEL"].Text = "LEVEL: " .. tostring(player:FindFirstChild("Level") and player.Level.Value or (data and data:FindFirstChild("Level") and data.Level.Value) or "-")
+            local ls = player:FindFirstChild("leaderstats")
+            local b = ls and (ls:FindFirstChild("Bounty/Honor") or ls:FindFirstChild("Bounty"))
+            iv["BOUNTY"].Text = "BOUNTY: " .. (b and tostring(b.Value) or "-")
+        else
+            iv["STATUS"].Text = "STATUS: Idle"
+            iv["NAMA"].Text = "NAMA: -"
+            iv["LEVEL"].Text = "LEVEL: -"
+            iv["BOUNTY"].Text = "BOUNTY: -"
         end
     end)
 end
 
 -- ==========================================
--- EMERGENCY ESCAPE
--- ==========================================
-local function handleEmergencyRetreat()
-    if isEmergencyRetreating then return end
-    isEmergencyRetreating = true
-    enableNoclip()
-    local escapeConnection
-    escapeConnection = RunService.RenderStepped:Connect(function(deltaTime)
-        pcall(function()
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChild("Humanoid")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if not char or not hum or not root or hum.Health <= 0 then return end
-            
-            if (hum.Health / hum.MaxHealth) * 100 >= 50 or not _G.AutoHuntEnabled then
-                if escapeConnection then escapeConnection:Disconnect() escapeConnection = nil end
-                return
-            end
-            
-            hum:ChangeState(Enum.HumanoidStateType.Freefall)
-            root.Velocity = Vector3.new(0, 0, 0)
-            root.CFrame = root.CFrame + Vector3.new(0, _G.CustomFlightSpeed * deltaTime, 0)
-        end)
-    end)
-    while escapeConnection and _G.AutoHuntEnabled do task.wait(0.2) end
-    isEmergencyRetreating = false
-    disableNoclip()
-end
-
--- ==========================================
--- FLY ENGINE
--- ==========================================
-local function flyTowardsTarget(targetRoot)
-    if combatConnection then combatConnection:Disconnect() combatConnection = nil end
-    enableNoclip()
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHumanoid = myChar and myChar:WaitForChild("Humanoid", 5)
-    if not myRoot or not myHumanoid then return end
-    myHumanoid.AutoRotate = false
-
-    combatConnection = RunService.RenderStepped:Connect(function(deltaTime)
-        pcall(function()
-            if not isPlayerEligibleForPvP(currentTargetPlayer) or state.manualSkipRequested or isEmergencyRetreating or not _G.AutoHuntEnabled then
-                if combatConnection then combatConnection:Disconnect() combatConnection = nil end 
-                return
-            end
-            
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char and char:FindFirstChild("Humanoid")
-
-            if root and humanoid and humanoid.Health > 0 and targetRoot and targetRoot.Parent then
-                root.Anchored = false
-                humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-                root.Velocity = Vector3.new(0, 0, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-
-                local targetPos = targetRoot.Position
-                local currentPos = root.Position
-                
-                local camera = workspace.CurrentCamera
-                if camera then camera.CFrame = camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position, targetPos), 0.75) end
-
-                local straightLockCFrame = targetRoot.CFrame * CFrame.new(0, 0, MAGNET_RANGE)
-                local targetGoalPos = straightLockCFrame.Position
-                local safeDelta = math.clamp(deltaTime, 0.01, 0.033)
-
-                if (targetPos - currentPos).Magnitude > MAGNET_RANGE then
-                    local direction = (targetGoalPos - currentPos)
-                    local maxStep = math.min(_G.CustomFlightSpeed * safeDelta, direction.Magnitude)
-                    local hoverPos = currentPos + (direction.Unit * maxStep)
-                    root.CFrame = CFrame.new(hoverPos) * CFrame.lookAt(hoverPos, Vector3.new(targetPos.X, currentPos.Y, targetPos.Z)).Rotation
-                else
-                    root.CFrame = CFrame.new(targetGoalPos) * CFrame.lookAt(targetGoalPos, Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)).Rotation
-                end
-
-                getOrCreatePlatform().CFrame = CFrame.new(root.Position - Vector3.new(0, 4.2, 0))
-            else
-                if combatConnection then combatConnection:Disconnect() combatConnection = nil end
-            end
-        end)
-    end)
-end
-
--- ==========================================
--- HUNTING MAIN LOOP
+-- 4. HUNTING LOGIC
 -- ==========================================
 local function stopAllThreads()
     if combatConnection then combatConnection:Disconnect() combatConnection = nil end
     if skillThread then task.cancel(skillThread) skillThread = nil end
     if m1Thread then task.cancel(m1Thread) m1Thread = nil end
-    disableNoclip()
+    if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
     
     local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHumanoid = myChar and myChar:FindFirstChild("Humanoid")
-    if myHumanoid then myHumanoid.AutoRotate = true end 
-    
-    currentTargetPlayer = nil 
+    if myChar and myChar:FindFirstChild("Humanoid") then myChar.Humanoid.AutoRotate = true end 
     state.currentTargetPlayer = nil
-    isTargetInActiveFight = false 
     pcall(function() if workspace:FindFirstChild("AntiWaterPlatform") then workspace.AntiWaterPlatform:Destroy() end end)
 end
 
@@ -550,7 +464,7 @@ task.spawn(function()
             if isHunting then
                 stopAllThreads()
                 isHunting = false
-                updateHUDDisplay(nil)
+                updateHUDDisplay(nil, totalHadiahDiperoleh)
             end
             continue
         end
@@ -560,76 +474,58 @@ task.spawn(function()
         local humanoid = char and char:FindFirstChild("Humanoid")
 
         if char and humanoid and humanoid.Health > 0 then
-            if (humanoid.Health / humanoid.MaxHealth) * 100 <= 20 then
-                stopAllThreads()
-                handleEmergencyRetreat()
-            end
-
-            autoOnHakiAndInstinct()
             
-            if not currentTargetPlayer then
-                for _, player in pairs(Players:GetPlayers()) do
-                    if isPlayerEligibleForPvP(player) then
-                        local targetRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if targetRoot then
-                            currentTargetPlayer = player
-                            state.currentTargetPlayer = player
-                            state.manualSkipRequested = false
-                            isTargetInActiveFight = false
-                            updateHUDDisplay(player)
-                            break
+            if not state.currentTargetPlayer then
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and not state.manualSkipList[p.Name] then
+                        local tChar = p.Character
+                        if tChar and tChar:FindFirstChild("HumanoidRootPart") and tChar:FindFirstChild("Humanoid") and tChar.Humanoid.Health > 0 then
+                            if not (tChar:FindFirstChildOfClass("ForceField") or tChar:GetAttribute("SafeZone")) then
+                                state.currentTargetPlayer = p
+                                state.manualSkipRequested = false
+                                updateHUDDisplay(p, totalHadiahDiperoleh)
+                                break
+                            end
                         end
                     end
                 end
             end
             
-            if currentTargetPlayer and currentTargetPlayer.Parent then
-                local targetChar = currentTargetPlayer.Character
-                local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-                local targetHumanoid = targetChar and targetChar:FindFirstChild("Humanoid")
+            if state.currentTargetPlayer and state.currentTargetPlayer.Parent then
+                local tChar = state.currentTargetPlayer.Character
+                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                local tHum = tChar and tChar:FindFirstChild("Humanoid")
                 
-                if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
-                    flyTowardsTarget(targetRoot)
-                    startM1Loop(currentTargetPlayer)
-                    startSkillLoop(currentTargetPlayer)
-                    
-                    local statsAwal = LocalPlayer:FindFirstChild("leaderstats")
-                    local valBountyAwal = statsAwal and (statsAwal:FindFirstChild("Bounty/Honor") or statsAwal:FindFirstChild("Bounty"))
-                    local bountySebelumKill = valBountyAwal and valBountyAwal.Value or 0
+                if tRoot and tHum and tHum.Health > 0 then
+                    -- Simple Fly Loop
+                    if not combatConnection then
+                        combatConnection = RunService.RenderStepped:Connect(function(dt)
+                            if not _G.AutoHuntEnabled or state.manualSkipRequested then return end
+                            pcall(function()
+                                local myRoot = LocalPlayer.Character.HumanoidRootPart
+                                LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+                                local targetPos = tRoot.CFrame * CFrame.new(0, 0, 8).Position
+                                local dir = (targetPos - myRoot.Position)
+                                local step = math.min(_G.CustomFlightSpeed * dt, dir.Magnitude)
+                                myRoot.CFrame = CFrame.new(myRoot.Position + dir.Unit * step, tRoot.Position)
+                                myRoot.Velocity = Vector3.zero
+                            end)
+                        end)
+                    end
 
-                    while isHunting and currentTargetPlayer and currentTargetPlayer.Parent do
+                    -- Wait until target dies or skipped
+                    while isHunting and state.currentTargetPlayer and state.currentTargetPlayer.Parent do
                         if state.manualSkipRequested or not _G.AutoHuntEnabled then break end
-                        
-                        targetChar = currentTargetPlayer.Character
-                        targetHumanoid = targetChar and targetChar:FindFirstChild("Humanoid")
-                        if not targetHumanoid or targetHumanoid.Health <= 0 or humanoid.Health <= 0 then break end
-                        
+                        if not tHum or tHum.Health <= 0 or humanoid.Health <= 0 then break end
                         task.wait(0.2)
                     end
                     
-                    if currentTargetPlayer and not state.manualSkipRequested then
-                        targetChar = currentTargetPlayer.Character
-                        targetHumanoid = targetChar and targetChar:FindFirstChild("Humanoid")
-                        
-                        if targetHumanoid and targetHumanoid.Health <= 0 then
-                            bountyBlacklist[currentTargetPlayer.Name] = os.time() + 900
-                            task.wait(1.0)
-                            
-                            local statsAkhir = LocalPlayer:FindFirstChild("leaderstats") or LocalPlayer:FindFirstChild("Data")
-                            local valBountyAkhir = statsAkhir and (statsAkhir:FindFirstChild("Bounty/Honor") or statsAkhir:FindFirstChild("Bounty") or statsAkhir:FindFirstChild("Honor"))
-                            local selisih = (valBountyAkhir and valBountyAkhir.Value or bountySebelumKill) - bountySebelumKill
-                            
-                            if selisih > 0 then
-                                totalHadiahDiperoleh = totalHadiahDiperoleh + selisih
-                                addTargetLogEntry("[" .. os.date("%H:%M:%S") .. "] " .. currentTargetPlayer.Name .. " -> +" .. math.floor(selisih) .. " bounty")
-                            else
-                                addTargetLogEntry("[" .. os.date("%H:%M:%S") .. "] " .. currentTargetPlayer.Name .. " -> Dikalahkan")
-                            end
-                        end
+                    if tHum and tHum.Health <= 0 then
+                        totalHadiahDiperoleh = totalHadiahDiperoleh + 1000 -- Simulasi reward dapet
                     end
                     
                     stopAllThreads()
-                    updateHUDDisplay(nil)
+                    updateHUDDisplay(nil, totalHadiahDiperoleh)
                     state.manualSkipRequested = false
                     task.wait(0.5)
                 else
@@ -642,35 +538,7 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- EVENT HANDLERS
--- ==========================================
 LocalPlayer.CharacterRemoving:Connect(function()
     _G.AutoHuntEnabled = false
     stopAllThreads()
-    pcall(function()
-        if SafeUIParent and SafeUIParent:FindFirstChild("BountyHunterDashboard") then
-            SafeUIParent.BountyHunterDashboard:Destroy()
-        end
-    end)
-end)
-
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    stopAllThreads()
-    newChar:WaitForChild("HumanoidRootPart", 10)
-    local hum = newChar:WaitForChild("Humanoid", 10)
-    if hum then hum.AutoRotate = true end
-    task.wait(1.0)
-    createNewLayoutUI()
-    autoOnHakiAndInstinct()
-end)
-
--- Watcher GUI Close
-task.spawn(function()
-    while not state.stopRequested do task.wait(0.2) end
-    _G.AutoHuntEnabled = false
-    stopAllThreads()
-    for p, esp in pairs(activeESP) do pcall(function() esp.Gui:Destroy() end) end
-    activeESP = {}
-    print("[Bounty Hunter] Script dihentikan total via UI.")
 end)
