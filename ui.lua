@@ -262,6 +262,7 @@ local function createNewLayoutUI()
     tabBar.Size = UDim2.new(1, -28, 0, 26)
     tabBar.Position = UDim2.fromOffset(14, 54)
     tabBar.BackgroundTransparency = 1
+    tabBar.ZIndex = 5
     tabBar.Parent = main
 
     local tabLayout = Instance.new("UIListLayout")
@@ -284,10 +285,17 @@ local function createNewLayoutUI()
         b.TextColor3 = MUTED
         b.TextSize = 9
         b.Font = Enum.Font.GothamBold
+        b.ZIndex = 5
         b.Parent = tabBar
         corner(b, 13) -- full pill (half of the 26px tab bar height)
         uistroke(b, STROKE, 1, 0.5)
-        addShadow(b, 0.7)
+        -- NOTE: no addShadow() here on purpose. addShadow() parents its
+        -- ImageLabel to obj.Parent (tabBar) and sizes it relative to
+        -- tabBar's own bounds, not to the individual button — so with
+        -- 4 tab buttons side by side, each call was stacking a tabBar-sized
+        -- shadow on top of tabBar, covering/eating the click input of the
+        -- other tab buttons underneath it. That's why tab switching looked
+        -- broken even though setActiveTab()/the click wiring were correct.
         tabButtons[name] = b
         return b
     end
