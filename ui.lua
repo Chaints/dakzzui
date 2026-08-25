@@ -130,7 +130,12 @@ local function createNewLayoutUI()
     --==================================================
     local root = Instance.new("Frame")
     root.Name = "Root"
-    root.Size = UDim2.fromOffset(360, 300)
+    -- Wide "landscape" layout instead of the old narrow/tall one: fixed
+    -- width big enough for two side-by-side cards, height grows to fit
+    -- whatever's inside (navbar + whichever tab is active) so nothing
+    -- ever gets clipped or forced to overlap.
+    root.Size = UDim2.fromOffset(620, 0)
+    root.AutomaticSize = Enum.AutomaticSize.Y
     root.AnchorPoint = Vector2.new(0.5, 0.5)
     root.Position = UDim2.new(0.5, 0, 0.4, 0)
     root.BackgroundTransparency = 1
@@ -143,9 +148,14 @@ local function createNewLayoutUI()
     -- drag to move the dashboard, and it's what stays on screen when
     -- you tap "><" to collapse just the cards underneath it.
     --==================================================
+    -- Single-row navbar (title, tab pills, collapse, stop all in one
+    -- horizontal strip) instead of the old two-row (title row + tab
+    -- row stacked) version — matches the reference layout and is
+    -- simpler to reason about since there's only one UIListLayout.
     local navbar = Instance.new("Frame")
     navbar.Name = "Navbar"
-    navbar.Size = UDim2.new(1, 0, 0, 46)
+    navbar.Size = UDim2.new(1, 0, 0, 0)
+    navbar.AutomaticSize = Enum.AutomaticSize.Y
     navbar.Position = UDim2.fromOffset(0, 0)
     navbar.BackgroundColor3 = CARD
     navbar.BorderSizePixel = 0
@@ -156,9 +166,23 @@ local function createNewLayoutUI()
     uistroke(navbar, STROKE, 1, 0.2)
     gradient(navbar, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
+    local navPadding = Instance.new("UIPadding")
+    navPadding.PaddingLeft = UDim.new(0, 14)
+    navPadding.PaddingRight = UDim.new(0, 10)
+    navPadding.PaddingTop = UDim.new(0, 10)
+    navPadding.PaddingBottom = UDim.new(0, 10)
+    navPadding.Parent = navbar
+
+    local navLayout = Instance.new("UIListLayout")
+    navLayout.FillDirection = Enum.FillDirection.Horizontal
+    navLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    navLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    navLayout.Padding = UDim.new(0, 10)
+    navLayout.Parent = navbar
+
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0, 110, 0, 18)
-    title.Position = UDim2.fromOffset(16, 14)
+    title.Size = UDim2.fromOffset(118, 26)
+    title.LayoutOrder = 1
     title.BackgroundTransparency = 1
     title.Text = "BOUNTY HUNTER"
     title.TextColor3 = TEXT
@@ -168,94 +192,16 @@ local function createNewLayoutUI()
     title.TextTruncate = Enum.TextTruncate.AtEnd
     title.Parent = navbar
 
-    -- header buttons: collapse / stop (top-right of the navbar)
-    local function headerButton(icon, xOffsetFromRight, size)
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.fromOffset(size or 30, size or 30)
-        b.AnchorPoint = Vector2.new(1, 0.5)
-        b.Position = UDim2.new(1, -xOffsetFromRight, 0.5, 0)
-        b.BackgroundColor3 = CARD2
-        b.BackgroundTransparency = 1
-        b.Text = icon
-        b.TextColor3 = MUTED
-        b.TextSize = 14
-        b.Font = Enum.Font.GothamBold
-        b.AutoButtonColor = false
-        b.ZIndex = 5
-        b.Parent = navbar
-        corner(b, 8)
-
-        b.MouseButton1Down:Connect(function()
-            tween(b, 0.08, { BackgroundTransparency = 0, BackgroundColor3 = CARD2 })
-        end)
-        b.MouseButton1Up:Connect(function()
-            tween(b, 0.12, { BackgroundTransparency = 1 })
-        end)
-        b.MouseLeave:Connect(function()
-            tween(b, 0.12, { BackgroundTransparency = 1 })
-        end)
-
-        return b
-    end
-
-    local hideBtn = headerButton("><", 10, 30)
-    hideBtn.TextSize = 11
-
-    local stopBtn = headerButton("×", 44, 28)
-    stopBtn.TextSize = 16
-
     --==================================================
-    -- TAB BAR — sits inside the navbar, below the title row
+    -- TAB BAR — fills the remaining horizontal space between the
+    -- title and the header buttons, tabs laid out left-to-right.
     --==================================================
     local tabBar = Instance.new("Frame")
-    tabBar.Size = UDim2.new(1, -20, 0, 0)
-    tabBar.AutomaticSize = Enum.AutomaticSize.Y
-    tabBar.Position = UDim2.fromOffset(10, 0)
-    tabBar.BackgroundTransparency = 1
-    tabBar.Visible = false -- becomes true once placed under the title row below
-    tabBar.Parent = navbar
-
-    -- Actually place the tab row as a second strip under the title,
-    -- so the navbar grows to fit both the title row and the tab pills.
-    tabBar.Visible = true
-    tabBar.Position = UDim2.fromOffset(10, 0)
-    navbar.AutomaticSize = Enum.AutomaticSize.Y
-    navbar.Size = UDim2.new(1, 0, 0, 0)
-
-    local navPadding = Instance.new("UIPadding")
-    navPadding.PaddingTop = UDim.new(0, 10)
-    navPadding.PaddingBottom = UDim.new(0, 10)
-    navPadding.Parent = navbar
-
-    local navLayout = Instance.new("UIListLayout")
-    navLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    navLayout.Padding = UDim.new(0, 8)
-    navLayout.Parent = navbar
-
-    local titleRow = Instance.new("Frame")
-    titleRow.Name = "TitleRow"
-    titleRow.Size = UDim2.new(1, -20, 0, 20)
-    titleRow.BackgroundTransparency = 1
-    titleRow.LayoutOrder = 1
-    titleRow.Parent = navbar
-
-    title.Parent = titleRow
-    title.Position = UDim2.fromOffset(0, 1)
-    title.Size = UDim2.new(1, -90, 1, 0)
-
-    hideBtn.Parent = titleRow
-    hideBtn.AnchorPoint = Vector2.new(1, 0.5)
-    hideBtn.Position = UDim2.new(1, -40, 0.5, 0)
-
-    stopBtn.Parent = titleRow
-    stopBtn.AnchorPoint = Vector2.new(1, 0.5)
-    stopBtn.Position = UDim2.new(1, 0, 0.5, 0)
-
     tabBar.Name = "TabRow"
-    tabBar.Size = UDim2.new(1, -20, 0, 26)
-    tabBar.AutomaticSize = Enum.AutomaticSize.None
+    tabBar.Size = UDim2.new(1, -246, 0, 26) -- room left after title(118)+pad+buttons(~90)
     tabBar.LayoutOrder = 2
-    tabBar.Position = UDim2.fromOffset(0, 0)
+    tabBar.BackgroundTransparency = 1
+    tabBar.Parent = navbar
 
     local tabLayout = Instance.new("UIListLayout")
     tabLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -292,6 +238,41 @@ local function createNewLayoutUI()
     createTabButton("TARGETS", "TARGETS", 2)
     createTabButton("COMBAT", "COMBAT", 3)
     createTabButton("HOP", "HOP", 4)
+
+    -- header buttons: collapse / stop (far right of the navbar)
+    local function headerButton(icon, order, size)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.fromOffset(size or 30, size or 30)
+        b.LayoutOrder = order
+        b.BackgroundColor3 = CARD2
+        b.BackgroundTransparency = 1
+        b.Text = icon
+        b.TextColor3 = MUTED
+        b.TextSize = 14
+        b.Font = Enum.Font.GothamBold
+        b.AutoButtonColor = false
+        b.ZIndex = 5
+        b.Parent = navbar
+        corner(b, 8)
+
+        b.MouseButton1Down:Connect(function()
+            tween(b, 0.08, { BackgroundTransparency = 0, BackgroundColor3 = CARD2 })
+        end)
+        b.MouseButton1Up:Connect(function()
+            tween(b, 0.12, { BackgroundTransparency = 1 })
+        end)
+        b.MouseLeave:Connect(function()
+            tween(b, 0.12, { BackgroundTransparency = 1 })
+        end)
+
+        return b
+    end
+
+    local hideBtn = headerButton("><", 3, 30)
+    hideBtn.TextSize = 11
+
+    local stopBtn = headerButton("×", 4, 28)
+    stopBtn.TextSize = 16
 
     --==================================================
     -- CARDS LAYER — everything below the navbar. This is a plain
@@ -367,11 +348,100 @@ local function createNewLayoutUI()
     --==================================================
     local dashTab = newTabContainer("DASHBOARD")
 
+    -- Two-column row: left = master status summary card, right = live
+    -- target info card. Matches the reference layout's side-by-side
+    -- card pattern instead of one narrow card stacked above the log.
+    local dashRow = Instance.new("Frame")
+    dashRow.Name = "DashRow"
+    dashRow.Size = UDim2.new(1, 0, 0, 128)
+    dashRow.BackgroundTransparency = 1
+    dashRow.LayoutOrder = 1
+    dashRow.Parent = dashTab
+
+    local dashRowLayout = Instance.new("UIListLayout")
+    dashRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    dashRowLayout.Padding = UDim.new(0, 10)
+    dashRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    dashRowLayout.Parent = dashRow
+
+    --------------------------------------------------
+    -- Left card: MASTER STATUS (mirrors state.isHunting)
+    --------------------------------------------------
+    local statusCard = Instance.new("Frame")
+    statusCard.Name = "StatusCard"
+    statusCard.Size = UDim2.new(0.5, -5, 1, 0)
+    statusCard.LayoutOrder = 1
+    statusCard.BackgroundColor3 = CARD
+    statusCard.BorderSizePixel = 0
+    statusCard.Parent = dashRow
+    corner(statusCard, 20)
+    addShadow(statusCard, 0.55)
+    uistroke(statusCard, STROKE, 1, 0.5)
+
+    local statusCardTitle = Instance.new("TextLabel")
+    statusCardTitle.Size = UDim2.new(1, -22, 0, 18)
+    statusCardTitle.Position = UDim2.fromOffset(11, 10)
+    statusCardTitle.BackgroundTransparency = 1
+    statusCardTitle.Text = "MASTER AUTO BOUNTY"
+    statusCardTitle.TextColor3 = MUTED
+    statusCardTitle.TextSize = 9
+    statusCardTitle.Font = Enum.Font.GothamBold
+    statusCardTitle.TextXAlignment = Enum.TextXAlignment.Left
+    statusCardTitle.Parent = statusCard
+
+    -- live ON/OFF pill, mirrors state.isHunting
+    local masterPill = Instance.new("Frame")
+    masterPill.Size = UDim2.fromOffset(40, 18)
+    masterPill.AnchorPoint = Vector2.new(1, 0)
+    masterPill.Position = UDim2.new(1, -11, 0, 9)
+    masterPill.BackgroundColor3 = MUTED
+    masterPill.Parent = statusCard
+    corner(masterPill, 99)
+
+    local masterPillLabel = Instance.new("TextLabel")
+    masterPillLabel.Size = UDim2.fromScale(1, 1)
+    masterPillLabel.BackgroundTransparency = 1
+    masterPillLabel.Text = "OFF"
+    masterPillLabel.TextColor3 = ACCENT_TEXT
+    masterPillLabel.TextSize = 9
+    masterPillLabel.Font = Enum.Font.GothamBold
+    masterPillLabel.Parent = masterPill
+
+    local function statusLine(labelText, y)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -22, 0, 16)
+        row.Position = UDim2.fromOffset(11, y)
+        row.BackgroundTransparency = 1
+        row.Parent = statusCard
+
+        local val = Instance.new("TextLabel")
+        val.Size = UDim2.new(1, 0, 1, 0)
+        val.BackgroundTransparency = 1
+        val.Text = labelText
+        val.TextColor3 = TEXT
+        val.TextSize = 9
+        val.Font = Enum.Font.Gotham
+        val.TextXAlignment = Enum.TextXAlignment.Left
+        val.TextTruncate = Enum.TextTruncate.AtEnd
+        val.Parent = row
+        return val
+    end
+
+    local masterStatusLine = statusLine("Status: Idle", 36)
+    local masterRegionLine = statusLine("Kecepatan: " .. tostring(_G.CustomFlightSpeed), 56)
+    local masterFilterLine = statusLine("Server Hop: siap", 76)
+    local masterExtraLine = statusLine("Target aktif: -", 96)
+
+    --------------------------------------------------
+    -- Right card: TARGET INFO (existing live-bound fields, unchanged
+    -- logic — only resized to sit side-by-side instead of full width)
+    --------------------------------------------------
     local info = Instance.new("Frame")
-    info.Size = UDim2.new(1, 0, 0, 108)
+    info.Size = UDim2.new(0.5, -5, 1, 0)
+    info.LayoutOrder = 2
     info.BackgroundColor3 = CARD
     info.BorderSizePixel = 0
-    info.Parent = dashTab
+    info.Parent = dashRow
     corner(info, 20)
     addShadow(info, 0.55)
     uistroke(info, STROKE, 1, 0.5)
@@ -1243,6 +1313,25 @@ local function createNewLayoutUI()
                 statusLabel.Text = "IDLE"
                 statusDot.BackgroundColor3 = MUTED
             end
+
+            -- mirror the same state into the left-hand MASTER AUTO
+            -- BOUNTY summary card (ON/OFF pill + status lines)
+            if state.isHunting then
+                masterPillLabel.Text = "ON"
+                tween(masterPill, 0.15, { BackgroundColor3 = GREEN })
+                masterStatusLine.Text = state.currentTargetPlayer
+                    and ("Status: Menyerang " .. state.currentTargetPlayer.Name)
+                    or "Status: Mencari target..."
+                masterExtraLine.Text = state.currentTargetPlayer
+                    and ("Target aktif: " .. state.currentTargetPlayer.Name)
+                    or "Target aktif: -"
+            else
+                masterPillLabel.Text = "OFF"
+                tween(masterPill, 0.15, { BackgroundColor3 = MUTED })
+                masterStatusLine.Text = "Status: Idle"
+                masterExtraLine.Text = "Target aktif: -"
+            end
+            masterRegionLine.Text = "Kecepatan: " .. tostring(_G.CustomFlightSpeed)
         end
     end)
 
