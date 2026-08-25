@@ -266,6 +266,12 @@ local function updateHUDDisplay(player)
     end
 end
 
+local function addTargetLogEntry(entryText)
+    if UI and not state.stopRequested then
+        UI.addTargetLogEntry(entryText)
+    end
+end
+
 -- NOTE: stopAllThreads() itself is defined further below in the hunting
 -- loop section of auto.lua. We can't forward-declare it here without
 -- causing a local-variable shadowing bug, so the watcher below calls it
@@ -1084,6 +1090,15 @@ local function startHuntingLoop()
                             if selisihBountyDapat > 0 then
                                 totalHadiahDiperoleh = totalHadiahDiperoleh + selisihBountyDapat
                             end
+
+                            local timeNow = os.date("%H:%M:%S")
+                            local logText
+                            if selisihBountyDapat > 0 then
+                                logText = "[" .. timeNow .. "] " .. currentTargetPlayer.Name .. " -> +" .. tostring(math.floor(selisihBountyDapat)) .. " bounty"
+                            else
+                                logText = "[" .. timeNow .. "] " .. currentTargetPlayer.Name .. " -> Dikalahkan"
+                            end
+                            addTargetLogEntry(logText)
                         end
                         stopAllThreads()
                         updateHUDDisplay(nil)

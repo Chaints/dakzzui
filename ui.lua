@@ -17,19 +17,19 @@ function UIModule.Init(SafeUIParent, state)
 
 local UI_NAME = "BountyHunterDashboard"
 
--- ---- palette ----
-local BG        = Color3.fromRGB(18, 18, 20)
-local CARD      = Color3.fromRGB(26, 26, 29)
-local CARD2     = Color3.fromRGB(33, 33, 37)
-local STROKE    = Color3.fromRGB(50, 50, 55)
-local TEXT      = Color3.fromRGB(240, 240, 242)
-local MUTED     = Color3.fromRGB(148, 148, 155)
-local ACCENT    = Color3.fromRGB(235, 235, 240)
-local ACCENT_2  = Color3.fromRGB(205, 205, 212)
-local ACCENT_TEXT = Color3.fromRGB(20, 20, 22)
-local GREEN     = Color3.fromRGB(96, 200, 145)
-local ORANGE    = Color3.fromRGB(220, 165, 90)
-local RED       = Color3.fromRGB(225, 95, 100)
+-- ---- palette (Maroon & Sand theme) ----
+local BG        = Color3.fromRGB(31, 7, 13)     -- deep maroon-black backdrop
+local CARD      = Color3.fromRGB(85, 11, 24)    -- #550B18 maroon
+local CARD2     = Color3.fromRGB(105, 20, 35)   -- lighter maroon for hover/press
+local STROKE    = Color3.fromRGB(140, 60, 70)   -- muted rose-maroon border
+local TEXT      = Color3.fromRGB(242, 229, 197) -- #F2E5C5 sand
+local MUTED     = Color3.fromRGB(200, 175, 145) -- dimmer sand
+local ACCENT    = Color3.fromRGB(242, 229, 197) -- #F2E5C5 sand (used as the "gold" accent)
+local ACCENT_2  = Color3.fromRGB(214, 195, 150) -- deeper sand for gradient
+local ACCENT_TEXT = Color3.fromRGB(45, 12, 18)  -- dark maroon text on top of sand backgrounds
+local GREEN     = Color3.fromRGB(120, 200, 130)
+local ORANGE    = Color3.fromRGB(230, 165, 90)
+local RED       = Color3.fromRGB(220, 90, 90)
 
 -- ---- helpers ----
 local TweenService = game:GetService("TweenService")
@@ -111,7 +111,7 @@ local function createNewLayoutUI()
     main.Parent = gui
     corner(main, 14)
     uistroke(main, STROKE, 1, 0.2)
-    gradient(main, Color3.fromRGB(18, 19, 24), Color3.fromRGB(13, 14, 17), 90)
+    gradient(main, Color3.fromRGB(95, 15, 30), Color3.fromRGB(65, 6, 16), 90)
 
     --==================================================
     -- HEADER
@@ -235,107 +235,91 @@ local function createNewLayoutUI()
     divider.Parent = main
 
     --==================================================
-    -- LEFT SIDE — CONTROLS
+    -- TAB BAR (Dashboard / Targets / Combat / Server Hop)
     --==================================================
-    local left = Instance.new("Frame")
-    left.Size = UDim2.fromOffset(172, 138)
-    left.Position = UDim2.fromOffset(14, 56)
-    left.BackgroundTransparency = 1
-    left.Parent = main
+    local tabBar = Instance.new("Frame")
+    tabBar.Size = UDim2.new(1, -28, 0, 26)
+    tabBar.Position = UDim2.fromOffset(14, 54)
+    tabBar.BackgroundTransparency = 1
+    tabBar.Parent = main
 
-    local controlsTitle = Instance.new("TextLabel")
-    controlsTitle.Size = UDim2.new(1, 0, 0, 16)
-    controlsTitle.BackgroundTransparency = 1
-    controlsTitle.Text = "CONTROLS"
-    controlsTitle.TextColor3 = MUTED
-    controlsTitle.TextSize = 9
-    controlsTitle.Font = Enum.Font.GothamBold
-    controlsTitle.TextXAlignment = Enum.TextXAlignment.Left
-    controlsTitle.Parent = left
+    local tabLayout = Instance.new("UIListLayout")
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.Padding = UDim.new(0, 6)
+    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabLayout.Parent = tabBar
 
-    local function controlButton(text, y, height)
+    local tabButtons = {}
+    local tabContainers = {}
+    local activeTabName = "DASHBOARD"
+
+    local function createTabButton(name, order)
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(1, 0, 0, height or 34)
-        b.Position = UDim2.fromOffset(0, y)
+        b.Size = UDim2.new(0, 82, 1, 0)
+        b.LayoutOrder = order
         b.BackgroundColor3 = CARD
         b.AutoButtonColor = false
-        b.Text = ""
-        b.Parent = left
-        corner(b, 8)
+        b.Text = name
+        b.TextColor3 = MUTED
+        b.TextSize = 9
+        b.Font = Enum.Font.GothamBold
+        b.Parent = tabBar
+        corner(b, 7)
         uistroke(b, STROKE, 1, 0.5)
-
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -22, 1, 0)
-        label.Position = UDim2.fromOffset(11, 0)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = TEXT
-        label.TextSize = 10
-        label.Font = Enum.Font.GothamMedium
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = b
-
-        pressFeedback(b, CARD, CARD2)
-
-        return b, label
+        tabButtons[name] = b
+        return b
     end
 
-    -- SKIP TARGET (wired to real skip logic)
-    local skipBtn, skipLabel = controlButton("SKIP TARGET", 20, 34)
-
-    -- HOP SERVER (status button — text/color updated live from readyJobIds)
-    local hopBtn = Instance.new("TextButton")
-    hopBtn.Size = UDim2.new(1, 0, 0, 34)
-    hopBtn.Position = UDim2.fromOffset(0, 60)
-    hopBtn.BackgroundColor3 = CARD
-    hopBtn.AutoButtonColor = false
-    hopBtn.Text = ""
-    hopBtn.Parent = left
-    corner(hopBtn, 8)
-    uistroke(hopBtn, STROKE, 1, 0.5)
-
-    local hopDot = Instance.new("Frame")
-    hopDot.Size = UDim2.fromOffset(6, 6)
-    hopDot.AnchorPoint = Vector2.new(0, 0.5)
-    hopDot.Position = UDim2.new(0, 11, 0.5, 0)
-    hopDot.BackgroundColor3 = ORANGE
-    hopDot.BorderSizePixel = 0
-    hopDot.Parent = hopBtn
-    corner(hopDot, 99)
-
-    local hopLabel = Instance.new("TextLabel")
-    hopLabel.Size = UDim2.new(1, -30, 1, 0)
-    hopLabel.Position = UDim2.fromOffset(22, 0)
-    hopLabel.BackgroundTransparency = 1
-    hopLabel.Text = "MENCARI..."
-    hopLabel.TextColor3 = TEXT
-    hopLabel.TextSize = 10
-    hopLabel.Font = Enum.Font.GothamMedium
-    hopLabel.TextXAlignment = Enum.TextXAlignment.Left
-    hopLabel.Parent = hopBtn
-
-    pressFeedback(hopBtn, CARD, CARD2)
-
-    -- placeholder third slot (kept empty; skill selector removed per request)
-    local infoSmall = Instance.new("TextLabel")
-    infoSmall.Size = UDim2.new(1, 0, 0, 34)
-    infoSmall.Position = UDim2.fromOffset(0, 100)
-    infoSmall.BackgroundTransparency = 1
-    infoSmall.Text = ""
-    infoSmall.TextColor3 = MUTED
-    infoSmall.TextSize = 8
-    infoSmall.Font = Enum.Font.Gotham
-    infoSmall.Parent = left
+    createTabButton("DASHBOARD", 1)
+    createTabButton("TARGETS", 2)
+    createTabButton("COMBAT", 3)
+    createTabButton("HOP", 4)
 
     --==================================================
-    -- RIGHT SIDE — TARGET INFO
+    -- TAB CONTENT AREA (all tabs share this same rectangle,
+    -- only the active one is Visible)
     --==================================================
+    local tabContentY = 86
+    local tabContentHeight = 116
+
+    local function newTabContainer(name)
+        local c = Instance.new("Frame")
+        c.Size = UDim2.new(1, -28, 0, tabContentHeight)
+        c.Position = UDim2.fromOffset(14, tabContentY)
+        c.BackgroundTransparency = 1
+        c.Visible = (name == "DASHBOARD")
+        c.Parent = main
+        tabContainers[name] = c
+        return c
+    end
+
+    local function setActiveTab(name)
+        if not tabContainers[name] then return end
+        activeTabName = name
+        for tabName, container in pairs(tabContainers) do
+            container.Visible = (tabName == name)
+        end
+        for tabName, btn in pairs(tabButtons) do
+            if tabName == name then
+                tween(btn, 0.12, { BackgroundColor3 = ACCENT })
+                btn.TextColor3 = ACCENT_TEXT
+            else
+                tween(btn, 0.12, { BackgroundColor3 = CARD })
+                btn.TextColor3 = MUTED
+            end
+        end
+    end
+
+    --==================================================
+    -- TAB: DASHBOARD — target info card (status/nama/level/jarak/bounty)
+    --==================================================
+    local dashTab = newTabContainer("DASHBOARD")
+
     local info = Instance.new("Frame")
-    info.Size = UDim2.fromOffset(176, 138)
-    info.Position = UDim2.fromOffset(200, 56)
+    info.Size = UDim2.new(1, 0, 1, 0)
     info.BackgroundColor3 = CARD
     info.BorderSizePixel = 0
-    info.Parent = main
+    info.Parent = dashTab
     corner(info, 10)
     uistroke(info, STROKE, 1, 0.5)
 
@@ -391,7 +375,7 @@ local function createNewLayoutUI()
 
     local miniDivider = Instance.new("Frame")
     miniDivider.Size = UDim2.new(1, -22, 0, 1)
-    miniDivider.Position = UDim2.fromOffset(11, 104)
+    miniDivider.Position = UDim2.fromOffset(11, 82)
     miniDivider.BackgroundColor3 = STROKE
     miniDivider.BackgroundTransparency = 0.4
     miniDivider.BorderSizePixel = 0
@@ -399,7 +383,7 @@ local function createNewLayoutUI()
 
     local bountyRow = Instance.new("Frame")
     bountyRow.Size = UDim2.new(1, -22, 0, 22)
-    bountyRow.Position = UDim2.fromOffset(11, 108)
+    bountyRow.Position = UDim2.fromOffset(11, 86)
     bountyRow.BackgroundTransparency = 1
     bountyRow.Parent = info
 
@@ -427,13 +411,109 @@ local function createNewLayoutUI()
     infoValues["BOUNTY"] = bountyValue
 
     --==================================================
-    -- SPEED SLIDER (1 - 350, real unit from _G.CustomFlightSpeed)
+    -- TAB: TARGETS — session kill log (resets on script reload,
+    -- newest entry at the top, capped at 20 entries)
     --==================================================
+    local targetsTab = newTabContainer("TARGETS")
+
+    local logFrame = Instance.new("Frame")
+    logFrame.Size = UDim2.new(1, 0, 1, 0)
+    logFrame.BackgroundColor3 = CARD
+    logFrame.BorderSizePixel = 0
+    logFrame.Parent = targetsTab
+    corner(logFrame, 10)
+    uistroke(logFrame, STROKE, 1, 0.5)
+
+    local logTitle = Instance.new("TextLabel")
+    logTitle.Size = UDim2.new(1, -20, 0, 16)
+    logTitle.Position = UDim2.fromOffset(11, 6)
+    logTitle.BackgroundTransparency = 1
+    logTitle.Text = "RIWAYAT TARGET (SESI INI)"
+    logTitle.TextColor3 = MUTED
+    logTitle.TextSize = 8
+    logTitle.Font = Enum.Font.GothamBold
+    logTitle.TextXAlignment = Enum.TextXAlignment.Left
+    logTitle.Parent = logFrame
+
+    local logScroll = Instance.new("ScrollingFrame")
+    logScroll.Size = UDim2.new(1, -14, 1, -28)
+    logScroll.Position = UDim2.fromOffset(7, 24)
+    logScroll.BackgroundTransparency = 1
+    logScroll.BorderSizePixel = 0
+    logScroll.ScrollBarThickness = 3
+    logScroll.ScrollBarImageColor3 = ACCENT
+    logScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    logScroll.Parent = logFrame
+
+    local logListLayout = Instance.new("UIListLayout")
+    logListLayout.Padding = UDim.new(0, 3)
+    logListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    logListLayout.Parent = logScroll
+
+    local logOrderCounter = 0
+    local MAX_LOG_ENTRIES = 20
+
+    local function addTargetLogEntry(entryText)
+        logOrderCounter = logOrderCounter + 1
+
+        local row = Instance.new("TextLabel")
+        row.Size = UDim2.new(1, 0, 0, 15)
+        row.LayoutOrder = -logOrderCounter -- newest first
+        row.BackgroundTransparency = 1
+        row.Text = entryText
+        row.TextColor3 = TEXT
+        row.TextSize = 9
+        row.Font = Enum.Font.Gotham
+        row.TextXAlignment = Enum.TextXAlignment.Left
+        row.TextTruncate = Enum.TextTruncate.AtEnd
+        row.Parent = logScroll
+
+        -- trim oldest entries beyond the cap
+        local children = logScroll:GetChildren()
+        local entries = {}
+        for _, child in ipairs(children) do
+            if child:IsA("TextLabel") then
+                table.insert(entries, child)
+            end
+        end
+        if #entries > MAX_LOG_ENTRIES then
+            table.sort(entries, function(a, b) return a.LayoutOrder > b.LayoutOrder end)
+            for i = MAX_LOG_ENTRIES + 1, #entries do
+                entries[i]:Destroy()
+            end
+        end
+    end
+
+    --==================================================
+    -- TAB: COMBAT — speed slider (1 - 350, real unit from _G.CustomFlightSpeed)
+    --==================================================
+    local combatTab = newTabContainer("COMBAT")
+
+    local combatCard = Instance.new("Frame")
+    combatCard.Size = UDim2.new(1, 0, 1, 0)
+    combatCard.BackgroundColor3 = CARD
+    combatCard.BorderSizePixel = 0
+    combatCard.Parent = combatTab
+    corner(combatCard, 10)
+    uistroke(combatCard, STROKE, 1, 0.5)
+
+    local combatTitle = Instance.new("TextLabel")
+    combatTitle.Size = UDim2.new(1, -20, 0, 16)
+    combatTitle.Position = UDim2.fromOffset(11, 8)
+    combatTitle.BackgroundTransparency = 1
+    combatTitle.Text = "PENGATURAN COMBAT"
+    combatTitle.TextColor3 = MUTED
+    combatTitle.TextSize = 8
+    combatTitle.Font = Enum.Font.GothamBold
+    combatTitle.TextXAlignment = Enum.TextXAlignment.Left
+    combatTitle.Parent = combatCard
+
     local speedRow = Instance.new("Frame")
-    speedRow.Size = UDim2.new(1, -28, 0, 34)
-    speedRow.Position = UDim2.fromOffset(14, 202)
+    speedRow.Size = UDim2.new(1, -22, 0, 34)
+    speedRow.Position = UDim2.fromOffset(11, 30)
     speedRow.BackgroundTransparency = 1
-    speedRow.Parent = main
+    speedRow.Parent = combatCard
 
     local speedText = Instance.new("TextLabel")
     speedText.Size = UDim2.fromOffset(62, 34)
@@ -468,7 +548,7 @@ local function createNewLayoutUI()
     speedBar.Size = UDim2.new(1, 0, 0, 6)
     speedBar.AnchorPoint = Vector2.new(0, 0.5)
     speedBar.Position = UDim2.new(0, 0, 0.5, 0)
-    speedBar.BackgroundColor3 = Color3.fromRGB(48, 51, 59)
+    speedBar.BackgroundColor3 = Color3.fromRGB(60, 25, 32)
     speedBar.BorderSizePixel = 0
     speedBar.Parent = speedTouchZone
     corner(speedBar, 99)
@@ -541,6 +621,75 @@ local function createNewLayoutUI()
         end
     end)
 
+    -- SKIP TARGET button lives in the Combat tab too (it's a combat action)
+    local skipBtn = Instance.new("TextButton")
+    skipBtn.Size = UDim2.new(1, -22, 0, 32)
+    skipBtn.Position = UDim2.fromOffset(11, 76)
+    skipBtn.BackgroundColor3 = CARD2
+    skipBtn.AutoButtonColor = false
+    skipBtn.Text = ""
+    skipBtn.Parent = combatCard
+    corner(skipBtn, 8)
+    uistroke(skipBtn, STROKE, 1, 0.4)
+
+    local skipLabel = Instance.new("TextLabel")
+    skipLabel.Size = UDim2.new(1, 0, 1, 0)
+    skipLabel.BackgroundTransparency = 1
+    skipLabel.Text = "SKIP TARGET"
+    skipLabel.TextColor3 = TEXT
+    skipLabel.TextSize = 10
+    skipLabel.Font = Enum.Font.GothamMedium
+    skipLabel.Parent = skipBtn
+
+    pressFeedback(skipBtn, CARD2, CARD)
+
+    --==================================================
+    -- TAB: HOP — server hop button (bigger/clearer since it now
+    -- has a whole tab to itself)
+    --==================================================
+    local hopTab = newTabContainer("HOP")
+
+    local hopBtn = Instance.new("TextButton")
+    hopBtn.Size = UDim2.new(1, 0, 1, 0)
+    hopBtn.BackgroundColor3 = CARD
+    hopBtn.AutoButtonColor = false
+    hopBtn.Text = ""
+    hopBtn.Parent = hopTab
+    corner(hopBtn, 10)
+    uistroke(hopBtn, STROKE, 1, 0.5)
+
+    local hopDot = Instance.new("Frame")
+    hopDot.Size = UDim2.fromOffset(10, 10)
+    hopDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    hopDot.Position = UDim2.new(0.5, 0, 0.38, 0)
+    hopDot.BackgroundColor3 = ORANGE
+    hopDot.BorderSizePixel = 0
+    hopDot.Parent = hopBtn
+    corner(hopDot, 99)
+
+    local hopLabel = Instance.new("TextLabel")
+    hopLabel.Size = UDim2.new(1, -20, 0, 20)
+    hopLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    hopLabel.Position = UDim2.new(0.5, 0, 0.65, 0)
+    hopLabel.BackgroundTransparency = 1
+    hopLabel.Text = "MENCARI..."
+    hopLabel.TextColor3 = TEXT
+    hopLabel.TextSize = 12
+    hopLabel.Font = Enum.Font.GothamBold
+    hopLabel.Parent = hopBtn
+
+    pressFeedback(hopBtn, CARD, CARD2)
+
+    --==================================================
+    -- TAB BUTTON CLICK WIRING
+    --==================================================
+    for tabName, btn in pairs(tabButtons) do
+        btn.MouseButton1Click:Connect(function()
+            setActiveTab(tabName)
+        end)
+    end
+    setActiveTab("DASHBOARD")
+
     --==================================================
     -- CIRCULAR "ZD" LOGO (always visible from the start, floating
     -- independently of the dashboard. Tapping it toggles the dashboard
@@ -560,7 +709,7 @@ local function createNewLayoutUI()
     logo.Parent = gui
     corner(logo, 26) -- perfect circle at 52x52
     uistroke(logo, STROKE, 1, 0.15)
-    gradient(logo, Color3.fromRGB(20, 21, 26), Color3.fromRGB(13, 14, 17), 90)
+    gradient(logo, Color3.fromRGB(95, 15, 30), Color3.fromRGB(50, 5, 12), 90)
 
     local logoZ = Instance.new("TextLabel")
     logoZ.Size = UDim2.fromOffset(36, 36)
@@ -1042,8 +1191,9 @@ local function createNewLayoutUI()
         end
     end)
 
-    -- Expose refs for updateHUDDisplay to use
+    -- Expose refs for updateHUDDisplay / auto.lua to use
     UIRefs.infoValues = infoValues
+    UIRefs.addTargetLogEntry = addTargetLogEntry
 end
 
 --==================================================
@@ -1097,12 +1247,22 @@ local function updateHUDDisplay(player)
     end)
 end
 
+local function addTargetLogEntry(entryText)
+    pcall(function()
+        createNewLayoutUI()
+        if UIRefs.addTargetLogEntry then
+            UIRefs.addTargetLogEntry(entryText)
+        end
+    end)
+end
+
 --==================================================
 -- MODULE RETURN
 --==================================================
 return {
     createNewLayoutUI = createNewLayoutUI,
     updateHUDDisplay = updateHUDDisplay,
+    addTargetLogEntry = addTargetLogEntry,
     UIRefs = UIRefs,
 }
 
