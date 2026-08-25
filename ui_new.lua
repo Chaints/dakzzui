@@ -1,7 +1,7 @@
 -- ==========================================
 -- ui.lua — Dashboard UI shell (visual/layout ONLY)
--- Loaded via loadstring(game:HttpGet(...))(). Returns a module table
--- with :Init(SafeUIParent) that builds the dashboard visuals.
+-- Loaded via loadstring(game:HttpGet(...))() and runs immediately —
+-- no extra .Init(...) or .createUI() call needed from the loader.
 --
 -- IMPORTANT: this file is UI/layout ONLY. It has no auto-hunting,
 -- auto-targeting, or auto-combat logic of any kind. Every value shown
@@ -13,6 +13,28 @@
 -- ==========================================
 
 local UIModule = {}
+
+-- Auto-detect a safe parent to put the ScreenGui under, since this
+-- file now runs itself immediately rather than waiting for the loader
+-- to pass one in. Prefers gethui() (executor-provided hidden UI
+-- container) when available, falling back to CoreGui, then PlayerGui.
+local function getSafeUIParent()
+    local ok, result = pcall(function()
+        if typeof(gethui) == "function" then
+            return gethui()
+        end
+        return nil
+    end)
+    if ok and result then return result end
+
+    local ok2, coreGui = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    if ok2 and coreGui then return coreGui end
+
+    local player = game:GetService("Players").LocalPlayer
+    return player and player:FindFirstChild("PlayerGui")
+end
 
 function UIModule.Init(SafeUIParent)
 
@@ -396,4 +418,15 @@ return {
 
 end -- UIModule.Init
 
-return UIModule
+-- ==========================================
+-- AUTO-RUN: build the UI immediately when this file loads, so
+-- loadstring(game:HttpGet(url))() alone is enough — no separate
+-- .Init(...) or .createUI() call is required from the loader script.
+-- ==========================================
+local parent = getSafeUIParent()
+local instance = UIModule.Init(parent)
+if instance then
+    instance.createUI()
+end
+
+return instance
