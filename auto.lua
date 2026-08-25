@@ -1017,7 +1017,7 @@ end
 -- startHuntingLoop / stopAllThreads / manualSkipList, which only exist
 -- as usable values from this point onward.
 pcall(function()
-    UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/auto.lua", true))()
+    UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Chaints/dakzzui/refs/heads/main/ui.lua", true))()
     if UI and UI.Init then
         UI.Init(SafeUIParent, state)
     end
